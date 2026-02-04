@@ -25,6 +25,7 @@ def main():
 
     run_split()
     run_step1()
+    run_step2()
 
     print("Pipeline complete.")
 
