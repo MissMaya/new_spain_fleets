@@ -37,7 +37,7 @@ META_DIR = LOGS_DIR / "meta"
 CALLIGRAPHY_TYPES = ["encadenada", "italica_cursiva", "procesal", "redonda"]
 
 
-def _stable_assign(key: str, test_ratio=0.2):
+def _stable_assign(key: str, test_ratio = 0.2):
     """
     Deterministically assign an item to train or test using hashing.
     """
@@ -53,10 +53,10 @@ def _basename(path: Path):
     return name
 
 
-def run_split(test_ratio=0.2):
+def run_split(test_ratio = 0.2):
     print("Starting HTR–GT pairing and stratified split...")
 
-    META_DIR.mkdir(parents=True, exist_ok=True)
+    META_DIR.mkdir(parents = True, exist_ok = True)
 
     # ------------------------------------------------------------------
     # Index HTR files by style
@@ -160,11 +160,11 @@ def run_split(test_ratio=0.2):
     safe_write_json(metadata, META_DIR / "split_metadata.json")
 
     # ------------------------------------------------------------------
-    # Human-readable CSV index
+    # Create a human-readable CSV index
     # ------------------------------------------------------------------
 
     csv_path = META_DIR / "htr_index.csv"
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+    with open(csv_path, "w", newline = "", encoding = "utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["id", "style", "split"])
 
