@@ -61,12 +61,12 @@ def run_step1():
     calligraphy_types = sorted({p["style"] for p in paired_data})
 
     # Core Step 1 processing
-    error_counts_by_style = process_step1_issues(
-        train_pairs = train_pairs,
-        step1_tags = all_step1_tags,
-        tag_schema = tag_schema,
-        calligraphy_types = calligraphy_types,
-        logs_dir = LOGS_DIR,
+    error_counts_by_style, _ = process_step1_issues(
+    train_pairs = train_pairs,
+    step1_tags = all_step1_tags,
+    tag_schema = tag_schema,
+    calligraphy_types = calligraphy_types,
+    logs_dir = LOGS_DIR,
     )
 
     # Generate tables and plots summarising results

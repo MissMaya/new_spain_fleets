@@ -18,8 +18,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
-import os
-import tempfile
 from typing import Any, Iterable
 
 
@@ -66,17 +64,19 @@ def safe_write_json(obj: Any, path: Path, indent: int = 2, ensure_ascii: bool = 
     """
     Atomic JSON write.
 
-    Writes to a temporary file first, then renames into place.
+    Writes to a temporary file in the SAME directory, then renames into place.
     Prevents partially-written JSON if execution is interrupted.
     """
+
+    path = Path(path)
     ensure_parent(path)
 
-    with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8") as tmp:
-        json.dump(obj, tmp, indent=indent, ensure_ascii=ensure_ascii)
-        tmp_path = tmp.name
+    tmp = path.with_suffix(path.suffix + ".tmp")
 
-    os.replace(tmp_path, path)
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(obj, f, indent=indent, ensure_ascii=ensure_ascii)
 
+    tmp.replace(path)
 
 # ---------------------------------------------------------------------
 # Text helpers
