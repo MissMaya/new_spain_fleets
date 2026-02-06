@@ -21,14 +21,10 @@ or via:
     python run_pipeline.py
 """
 
-from utils.config import LOGS_DIR
-from utils.file_io import load_json_if_exists
+from utils.config import LOGS_DIR, SCHEMAS_DIR
+from utils.file_io import load_json_if_exists, read_json
 from utils.processing import process_step3_issues
 from utils.visualise import generate_all_outputs
-
-
-STEP1_TAGS = {"L", "T", "W", "SP", "C", "P", "G", "M", "MP"}
-STEP2_TAGS = {"X", "I", "D"}
 
 
 def _load_spans_by_file(tag_set):
@@ -54,7 +50,16 @@ def _load_spans_by_file(tag_set):
                 continue
 
             issues = load_json_if_exists(issues_path, [])
-            spans = [i for i in issues if i.get("tag") in tag_set]
+
+            spans = [
+                {
+                    "tag": i["tag"],
+                    "start": i["_abs_start"],
+                    "end": i["_abs_end"],
+                }
+                for i in issues
+                if i.get("tag") in tag_set and "_abs_start" in i
+            ]
 
             if spans:
                 spans_by_file[doc_id] = spans
@@ -71,19 +76,39 @@ def run_step3():
     if not train_pairs:
         raise RuntimeError("No training pairs found. Please run previous steps first.")
 
-    # Reload Step 1 + Step 2 spans from disk
-    step1_spans_by_file = _load_spans_by_file(STEP1_TAGS)
-    step2_spans_by_file = _load_spans_by_file(STEP2_TAGS)
+    # ------------------------------------------------------------------
+    # Load schema (single source of truth)
+    # ------------------------------------------------------------------
 
+    tag_schema = read_json(SCHEMAS_DIR / "tag_schema.json")
+
+    # Build tag sets dynamically
+    step1_tags = {f"S1{t}" for t in tag_schema["S1"].keys()}
+    step2_tags = {f"S2{t}" for t in tag_schema["S2"].keys()}
+
+    # ------------------------------------------------------------------
+    # Reload Step 1 + Step 2 spans from disk
+    # ------------------------------------------------------------------
+
+    step1_spans_by_file = _load_spans_by_file(step1_tags)
+    step2_spans_by_file = _load_spans_by_file(step2_tags)
+
+    # ------------------------------------------------------------------
     # Run Step 3 processing
+    # ------------------------------------------------------------------
+
     error_counts_by_style = process_step3_issues(
         train_pairs=train_pairs,
         step1_spans_by_file=step1_spans_by_file,
         step2_spans_by_file=step2_spans_by_file,
+        tag_schema=tag_schema,
         logs_dir=LOGS_DIR,
     )
 
-    # Visual summaries (same format as Step 1)
+    # ------------------------------------------------------------------
+    # Visual summaries
+    # ------------------------------------------------------------------
+
     summaries_dir = LOGS_DIR / "step_summaries"
     generate_all_outputs(error_counts_by_style, "step3", summaries_dir)
 
@@ -92,4 +117,3 @@ def run_step3():
 
 if __name__ == "__main__":
     run_step3()
-
