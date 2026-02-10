@@ -33,23 +33,44 @@ from utils.tag_rules import all_step3_tags
 # Shared helpers
 # ----------------------------------------------------------------------
 
-def _compute_line_offsets(text: str):
+def _compute_line_offsets(text: str) -> List[int]:
+    """
+    Return a list of absolute character offsets for the start of each line.
+    """
     lines = text.splitlines(keepends=True)
-    offsets = []
+    offsets: List[int] = []
     pos = 0
     for ln in lines:
         offsets.append(pos)
         pos += len(ln)
+    if not offsets:
+        offsets = [0]
     return offsets
 
 
-def _find_line_number(offsets, char_index):
+def _find_line_number(offsets: List[int], char_index: int) -> int:
+    """
+    Convert absolute char index to 1-based line number.
+    """
     line = 1
     for i, start in enumerate(offsets):
         if start > char_index:
             break
         line = i + 1
     return line
+
+
+def _offset_to_line_col(offsets: List[int], idx: int) -> tuple[int, int]:
+    """
+    Convert absolute char index to (line_number, col_number), both 1-based.
+    """
+    line_idx = 0
+    for i, start in enumerate(offsets):
+        if start > idx:
+            break
+        line_idx = i
+    col = idx - offsets[line_idx]
+    return line_idx + 1, col + 1
 
 
 # ----------------------------------------------------------------------
@@ -63,44 +84,16 @@ def process_step1_issues(
     calligraphy_types,
     logs_dir,
 ):
+    """
+    Step 1: apply rule-based regex tags to HTR text.
 
-    from collections import defaultdict
-    from pathlib import Path
-    from utils.file_io import safe_write_json, read_text
+    Writes per-document issues.json and returns:
+      - error_counts_by_style
+      - step1_spans_by_file (absolute spans for downstream overlap logic)
+    """
 
-    # ------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------
-
-    def compute_line_offsets(text: str):
-        offsets = [0]
-        for i, ch in enumerate(text):
-            if ch == "\n":
-                offsets.append(i + 1)
-        return offsets
-
-    def offset_to_line_col(offsets, idx):
-        line = 0
-        for i, start in enumerate(offsets):
-            if start > idx:
-                break
-            line = i
-        col = idx - offsets[line]
-        return line + 1, col + 1
-
-    # ------------------------------------------------------------
-    # Aggregates
-    # ------------------------------------------------------------
-
-    error_counts_by_style = {
-        style: defaultdict(int) for style in calligraphy_types
-    }
-
+    error_counts_by_style = {style: defaultdict(int) for style in calligraphy_types}
     step1_spans_by_file = defaultdict(list)
-
-    # ------------------------------------------------------------
-    # Main loop
-    # ------------------------------------------------------------
 
     for pair in train_pairs:
         style = pair["style"]
@@ -108,65 +101,56 @@ def process_step1_issues(
         htr_path = Path(pair["htr_path"])
 
         text = read_text(htr_path)
-        line_offsets = compute_line_offsets(text)
+        line_offsets = _compute_line_offsets(text)
 
         issues = []
 
         # step1_tags is: { "G": regex, ... }
         for code, regex in step1_tags.items():
             for match in regex.finditer(text):
-
                 start = match.start()
                 end = match.end()
 
                 tag = f"S1{code}"
 
-                line, char_start = offset_to_line_col(line_offsets, start)
-                _, char_end = offset_to_line_col(line_offsets, max(end - 1, start))
+                line, char_start = _offset_to_line_col(line_offsets, start)
+                _, char_end = _offset_to_line_col(line_offsets, max(end - 1, start))
 
                 snippet = text[start:end]
 
                 issue = {
                     "tag": tag,
+                    "description": tag_schema["S1"][code],
                     "line": line,
                     "char_start": char_start,
                     "char_end": char_end,
                     "htr_text": snippet,
                     "gt_text": None,
+                    "overlaps_step1": [],
+                    "overlaps_step2": [],
+                    "review": {"status": "unreviewed"},
                     "_abs_start": start,
                     "_abs_end": end,
                 }
 
                 issues.append(issue)
 
+                # absolute spans used later for overlap checks
                 step1_spans_by_file[doc_id].append(
-                    {
-                        "tag": tag,
-                        "start": start,
-                        "end": end,
-                    }
+                    {"tag": tag, "start": start, "end": end}
                 )
 
                 error_counts_by_style[style][tag] += 1
 
-        # --------------------------------------------------------
-        # Write per-document issues
-        # --------------------------------------------------------
-
         doc_dir = logs_dir / style / doc_id
         doc_dir.mkdir(parents=True, exist_ok=True)
-
-        clean = [
-            {k: v for k, v in issue.items() if not k.startswith("_")}
-            for issue in issues
-        ]
-
-        safe_write_json(clean, doc_dir / "issues.json")
+        safe_write_json(issues, doc_dir / "issues.json")
 
     return error_counts_by_style, step1_spans_by_file
 
+
 # ----------------------------------------------------------------------
-# STEP 2 (unchanged)
+# STEP 2
 # ----------------------------------------------------------------------
 
 def process_step2_issues(
@@ -175,30 +159,64 @@ def process_step2_issues(
     tag_schema: Dict,
     logs_dir: Path,
 ):
+    """
+    Step 2: align GT↔HTR and emit S2X/S2I/S2D issues.
+
+    Returns:
+      - confusion_by_style (GT char × HTR char, including Ø)
+      - overlap_metadata (S1↔S2)
+      - step2_spans_by_file (absolute spans for downstream overlap logic)
+    """
 
     confusion_by_style = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     overlap_totals = defaultdict(int)
     overlap_by_style = defaultdict(lambda: defaultdict(int))
 
+    # IMPORTANT: downstream overlap logic expects start/end keys
     step2_spans_by_file = defaultdict(list)
 
     for pair in train_pairs:
         style = pair["style"]
         doc_id = pair["id"]
 
-        gt_text = read_text(pair["gt_path"])
-        htr_text = read_text(pair["htr_path"])
+        gt_text_full = read_text(pair["gt_path"])
+        htr_text_full = read_text(pair["htr_path"])
 
         step1_spans = step1_spans_by_file.get(doc_id, [])
 
-        issues = align_and_tag(gt_text, htr_text, step1_spans)
+        issues = align_and_tag(gt_text_full, htr_text_full, step1_spans)
+
+        # Precompute line offsets once per doc for line/char conversion
+        line_offsets = _compute_line_offsets(htr_text_full)
 
         for issue in issues:
+            # Keep segments for confusion matrix BEFORE we rename keys
+            gt_seg = issue.get("gt") or ""
+            htr_seg = issue.get("htr") or ""
 
-            raw_tag = issue["tag"]     
-            full_tag = f"S2{raw_tag}"
+            raw_tag = issue["tag"]     # e.g. "I"
+            full_tag = f"S2{raw_tag}"  # e.g. "S2I"
             issue["tag"] = full_tag
             issue["description"] = tag_schema["S2"][raw_tag]
+
+            # --- unify to canonical schema ---
+            start = issue.pop("start")
+            end = issue.pop("end")
+            issue["_abs_start"] = start
+            issue["_abs_end"] = end
+
+            line = _find_line_number(line_offsets, start)
+            issue["line"] = line
+            issue["char_start"] = start - line_offsets[line - 1] + 1
+            issue["char_end"] = max(issue["char_start"], end - line_offsets[line - 1])
+
+            issue["htr_text"] = issue.pop("htr")
+            issue["gt_text"] = issue.pop("gt")
+
+            issue.setdefault("overlaps_step1", [])
+            issue["overlaps_step2"] = []
+
+            issue["review"] = {"status": "unreviewed"}
 
             log_issue(
                 logs_dir=logs_dir,
@@ -207,10 +225,14 @@ def process_step2_issues(
                 issue=issue,
             )
 
-            step2_spans_by_file[doc_id].append(issue)
+            # Store spans in the simple format Step 3 expects for overlap checks
+            step2_spans_by_file[doc_id].append(
+                {"tag": full_tag, "start": start, "end": end}
+            )
 
-            gt_seg = issue["gt"] if issue["gt"] else NULL_CHAR
-            htr_seg = issue["htr"] if issue["htr"] else NULL_CHAR
+            # Confusion matrix (character-level), using original segments
+            gt_seg = gt_seg if gt_seg else NULL_CHAR
+            htr_seg = htr_seg if htr_seg else NULL_CHAR
 
             max_len = max(len(gt_seg), len(htr_seg))
             for i in range(max_len):
@@ -218,6 +240,7 @@ def process_step2_issues(
                 h = htr_seg[i] if i < len(htr_seg) else NULL_CHAR
                 confusion_by_style[style][g][h] += 1
 
+            # Overlap tracking (S1↔S2)
             if issue["overlaps_step1"]:
                 overlap_totals["total"] += 1
                 overlap_by_style[style]["total"] += 1
@@ -237,7 +260,7 @@ def process_step2_issues(
 
 
 # ----------------------------------------------------------------------
-# STEP 3 (unchanged)
+# STEP 3
 # ----------------------------------------------------------------------
 
 def process_step3_issues(
@@ -247,20 +270,16 @@ def process_step3_issues(
     tag_schema: Dict,
     logs_dir: Path,
 ):
+    """
+    Step 3: apply heuristic regex rules to HTR and compute overlaps with Step 1/2.
+
+    Returns:
+      - error_counts_by_style
+    """
 
     error_counts_by_style = defaultdict(lambda: defaultdict(int))
     s1_s3_overlap = defaultdict(lambda: defaultdict(int))
     s2_s3_overlap = defaultdict(lambda: defaultdict(int))
-
-    # Helper for line/column (1-based)
-    def offset_to_line_col(offsets, idx):
-        line = 0
-        for i, start in enumerate(offsets):
-            if start > idx:
-                break
-            line = i
-        col = idx - offsets[line]
-        return line + 1, col + 1
 
     for pair in train_pairs:
         style = pair["style"]
@@ -274,15 +293,14 @@ def process_step3_issues(
 
         for raw_tag, regex in all_step3_tags.items():
             for match in regex.finditer(htr_text):
-
                 full_tag = f"S3{raw_tag}"
                 description = tag_schema["S3"][raw_tag]
 
                 start = match.start()
                 end = match.end()
 
-                line, char_start = offset_to_line_col(line_offsets, start)
-                _, char_end = offset_to_line_col(line_offsets, max(end - 1, start))
+                line, char_start = _offset_to_line_col(line_offsets, start)
+                _, char_end = _offset_to_line_col(line_offsets, max(end - 1, start))
 
                 snippet = htr_text[start:end]
 
@@ -293,7 +311,7 @@ def process_step3_issues(
                     if spans_overlap(start, end, s1["start"], s1["end"])
                 ]
 
-                # Overlaps with Step 2
+                # Overlaps with Step 2 (Step 2 spans are {tag,start,end})
                 overlapping_s2 = [
                     s2["tag"]
                     for s2 in step2_spans
@@ -315,6 +333,7 @@ def process_step3_issues(
                     "gt_text": None,
                     "overlaps_step1": sorted(set(overlapping_s1)),
                     "overlaps_step2": sorted(set(overlapping_s2)),
+                    "review": {"status": "unreviewed"},
                     "_abs_start": start,
                     "_abs_end": end,
                 }

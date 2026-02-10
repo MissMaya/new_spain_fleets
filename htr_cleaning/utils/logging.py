@@ -26,39 +26,78 @@ from typing import Dict, Any
 from utils.file_io import load_json_if_exists, safe_write_json
 
 
+# ----------------------------------------------------------------------
+# Duplicate detection
+# ----------------------------------------------------------------------
+
 def is_duplicate(existing_entries, new_entry):
     """
     Check whether an identical issue has already been logged.
-    Two issues are considered duplicates if they share the same tag and span.
+
+    Two issues are considered duplicates if they share:
+    - the same tag
+    - the same absolute span (_abs_start, _abs_end)
     """
     for e in existing_entries:
         if (
             e.get("tag") == new_entry.get("tag")
-            and e.get("start") == new_entry.get("start")
-            and e.get("end") == new_entry.get("end")
+            and e.get("_abs_start") == new_entry.get("_abs_start")
+            and e.get("_abs_end") == new_entry.get("_abs_end")
         ):
             return True
     return False
 
 
+# ----------------------------------------------------------------------
+# Human-readable formatting
+# ----------------------------------------------------------------------
+
 def format_issue_for_text(issue: Dict[str, Any]) -> str:
     """
-    Convert an issue dict into a readable one-line text representation.
+    Convert an issue dict into a readable multi-field one-line text representation.
+
+    This is NOT the canonical record — JSON is.
     """
     tag = issue.get("tag", "")
-    start = issue.get("start", "")
-    end = issue.get("end", "")
-    msg = issue.get("message", "")
-    return f"[{tag}] ({start}-{end}) {msg}\n"
+    desc = issue.get("description", "")
+    line = issue.get("line", "")
+    cs = issue.get("char_start", "")
+    ce = issue.get("char_end", "")
 
+    review_status = issue.get("review", {}).get("status", "unknown")
+
+    htr = issue.get("htr_text", "")
+    gt = issue.get("gt_text", "")
+
+    parts = [
+        f"[{tag}]",
+        f"line {line}:{cs}-{ce}",
+        f"({review_status})",
+    ]
+
+    if desc:
+        parts.append(desc)
+
+    text = " ".join(parts)
+
+    if htr:
+        text += f"\n  HTR: {htr}"
+    if gt:
+        text += f"\n  GT : {gt}"
+
+    return text + "\n\n"
+
+
+# ----------------------------------------------------------------------
+# Main logger
+# ----------------------------------------------------------------------
 
 def log_issue(
     logs_dir: Path,
     calligraphy_type: str,
     document_id: str,
     issue: Dict[str, Any],
-    ):
-
+):
     """
     Append a detected issue to the per-document JSON and TXT logs.
 
@@ -74,22 +113,22 @@ def log_issue(
         Base document identifier.
 
     issue : dict
-        Issue payload (tag, span, message, etc.).
+        Issue payload (canonical schema).
     """
 
-    doc_log_dir = logs_dir / f"calligraphy_{calligraphy_type}"
-    doc_log_dir.mkdir(parents = True, exist_ok = True)
+    doc_log_dir = logs_dir / calligraphy_type / document_id
+    doc_log_dir.mkdir(parents=True, exist_ok=True)
 
-    json_path = doc_log_dir / f"{document_id}.json"
-    txt_path = doc_log_dir / f"{document_id}.txt"
+    json_path = doc_log_dir / "issues.json"
+    txt_path  = doc_log_dir / "issues.txt"
 
-    existing = load_json_if_exists(json_path, default = [])
+    existing = load_json_if_exists(json_path, default=[])
 
     if not is_duplicate(existing, issue):
-        # Update canonical JSON log (safe write)
+        # Update canonical JSON log
         existing.append(issue)
         safe_write_json(existing, json_path)
 
         # Append human-readable TXT log
-        with open(txt_path, "a", encoding = "utf-8") as f:
+        with open(txt_path, "a", encoding="utf-8") as f:
             f.write(format_issue_for_text(issue))
