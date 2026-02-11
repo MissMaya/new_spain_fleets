@@ -13,7 +13,6 @@ This removes ONLY runtime-generated folders:
 Source code (utils/, pipeline/, *.py) is never touched.
 
 Intended for local experimentation and debugging.
-Not used in production runs.
 """
 
 import shutil
@@ -29,6 +28,7 @@ def reset_project_data():
     This preserves all source code.
     """
 
+# TODO FLAG: COULD IMPROVE THIS TO READ FROM SINGLE DIR SOURCE IN CONFIG.PY
     for d in [DATA_DIR, LOGS_DIR, OUTPUTS_DIR, ZIPS_DIR]:
         if d.exists():
             print(f"Removing {d}")

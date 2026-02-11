@@ -1,15 +1,15 @@
 """
 run_step3.py
 
-Pipeline stage for Step 3: linguistic / paleographic heuristics.
+Pipeline stage for Step 3: Runs linguistic / paleographic heuristics.
 
 This stage:
 
-- Loads training HTR–GT pairs
+- Loads training HTR_GT pairs
 - Reloads Step 1 and Step 2 spans from logs (for reproducibility)
 - Applies Step 3 heuristic regex rules
 - Logs Step 3 issues
-- Computes S1↔S3 and S2↔S3 overlap metadata
+- Computes S1<->S3 and S2<->S3 overlap metadata
 - Produces per-style Step 3 summaries
 
 Typical usage:
@@ -74,20 +74,20 @@ def run_step3():
     train_pairs = load_json_if_exists(meta_dir / "train_pairs.json", [])
 
     if not train_pairs:
-        raise RuntimeError("No training pairs found. Please run previous steps first.")
+        raise RuntimeError("No training pairs found. Please run run_split.py and tagging for Steps 1 and 2 first.")
 
     # ------------------------------------------------------------------
-    # Load schema (single source of truth)
+    # Load schema
     # ------------------------------------------------------------------
 
     tag_schema = read_json(SCHEMAS_DIR / "tag_schema.json")
 
-    # Build tag sets dynamically
+    # Build tag sets
     step1_tags = {f"S1{t}" for t in tag_schema["S1"].keys()}
     step2_tags = {f"S2{t}" for t in tag_schema["S2"].keys()}
 
     # ------------------------------------------------------------------
-    # Reload Step 1 + Step 2 spans from disk
+    # Reload Step 1 + Step 2 spans
     # ------------------------------------------------------------------
 
     step1_spans_by_file = _load_spans_by_file(step1_tags)
@@ -98,11 +98,11 @@ def run_step3():
     # ------------------------------------------------------------------
 
     error_counts_by_style = process_step3_issues(
-        train_pairs=train_pairs,
-        step1_spans_by_file=step1_spans_by_file,
-        step2_spans_by_file=step2_spans_by_file,
-        tag_schema=tag_schema,
-        logs_dir=LOGS_DIR,
+        train_pairs = train_pairs,
+        step1_spans_by_file = step1_spans_by_file,
+        step2_spans_by_file = step2_spans_by_file,
+        tag_schema = tag_schema,
+        logs_dir = LOGS_DIR,
     )
 
     # ------------------------------------------------------------------

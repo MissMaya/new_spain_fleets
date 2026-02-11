@@ -1,23 +1,19 @@
 """
 logging.py
 
-Helpers for recording detected transcription issues during pipeline execution.
+Helpers for recording transcription issues.
 
-This module writes two representations for each document:
+Two representations for each HTR file in the train set:
 
-1. A machine-readable JSON log (canonical source of truth)
+1. A machine-readable JSON log
 2. A human-readable TXT log
 
-JSON logs are written safely (never left half-written).
-TXT logs are appended incrementally for readability.
-
-Responsibilities:
+The helpers do the following:
 - Create per-document log files grouped by calligraphy style
 - Append new issues
 - Prevent duplicate entries
-- Maintain both JSON and TXT representations
+- Maintain both JSON and TXT logs
 
-This module contains no pipeline orchestration logic.
 """
 
 from pathlib import Path
@@ -56,7 +52,7 @@ def format_issue_for_text(issue: Dict[str, Any]) -> str:
     """
     Convert an issue dict into a readable multi-field one-line text representation.
 
-    This is NOT the canonical record — JSON is.
+    This record exists to help humans. The JSON log is the canonical form.
     """
     tag = issue.get("tag", "")
     desc = issue.get("description", "")
@@ -113,11 +109,11 @@ def log_issue(
         Base document identifier.
 
     issue : dict
-        Issue payload (canonical schema).
+        Issue payload (the schema).
     """
 
     doc_log_dir = logs_dir / calligraphy_type / document_id
-    doc_log_dir.mkdir(parents=True, exist_ok=True)
+    doc_log_dir.mkdir(parents = True, exist_ok = True)
 
     json_path = doc_log_dir / "issues.json"
     txt_path  = doc_log_dir / "issues.txt"
@@ -125,10 +121,10 @@ def log_issue(
     existing = load_json_if_exists(json_path, default=[])
 
     if not is_duplicate(existing, issue):
-        # Update canonical JSON log
+        # Update JSON log
         existing.append(issue)
         safe_write_json(existing, json_path)
 
         # Append human-readable TXT log
-        with open(txt_path, "a", encoding="utf-8") as f:
+        with open(txt_path, "a", encoding = "utf-8") as f:
             f.write(format_issue_for_text(issue))

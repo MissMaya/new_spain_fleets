@@ -1,7 +1,7 @@
 """
 visualise.py
 
-Utilities for producing human-facing summaries from pipeline outputs.
+Utilities for plotting pipeline outputs
 
 Supports:
 
@@ -11,11 +11,11 @@ Step 1:
 - Per-style bar charts
 
 Step 2:
-- Unified Ø confusion matrices (GT × HTR)
+- Unified Ø confusion matrices (GT x HTR)
 - CSV exports per style
 - PNG heatmaps per style
 
-All outputs are written to disk (no interactive display).
+No interactive display - all plots are written to output files. 
 """
 
 from pathlib import Path
@@ -33,25 +33,25 @@ NULL_CHAR = "Ø"
 
 
 # ----------------------------------------------------------------------
-# STEP 1 VISUALS (unchanged)
+# STEP 1 VISUALS
 # ----------------------------------------------------------------------
 
 def write_step_summary_json(error_counts_by_style: Dict, output_dir: Path, step_name: str):
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents = True, exist_ok = True)
     path = output_dir / f"{step_name}_summary.json"
 
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(error_counts_by_style, f, indent=2, ensure_ascii=False)
+    with open(path, "w", encoding = "utf-8") as f:
+        json.dump(error_counts_by_style, f, indent = 2, ensure_ascii = False)
 
 
 def write_step_summary_csv(error_counts_by_style: Dict, output_dir: Path, step_name: str):
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents = True, exist_ok = True)
     path = output_dir / f"{step_name}_summary.csv"
 
     styles = sorted(error_counts_by_style.keys())
     tags = sorted(next(iter(error_counts_by_style.values())).keys())
 
-    with open(path, "w", newline="", encoding="utf-8") as f:
+    with open(path, "w", newline = "", encoding = "utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["style"] + tags)
 
@@ -61,15 +61,15 @@ def write_step_summary_csv(error_counts_by_style: Dict, output_dir: Path, step_n
 
 
 def plot_step_summary(error_counts_by_style: Dict, output_dir: Path, step_name: str):
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents = True, exist_ok = True)
 
     for style, tag_counts in error_counts_by_style.items():
         tags = list(tag_counts.keys())
         counts = [tag_counts[t] for t in tags]
 
-        plt.figure(figsize=(10, 4))
+        plt.figure(figsize = (10, 4))
         plt.bar(tags, counts)
-        plt.title(f"{step_name.upper()} – {style}")
+        plt.title(f"{step_name.upper()} - {style}")
         plt.xlabel("Tag")
         plt.ylabel("Count")
         plt.tight_layout()
@@ -91,10 +91,10 @@ def generate_all_outputs(error_counts_by_style: Dict, step_name: str, output_dir
 
 def write_confusion_matrices(confusion_by_style: Dict, output_dir: Path):
     """
-    Write unified Ø confusion matrices (GT × HTR) to CSV + PNG per style.
+    Write per style confusion matrices (HTR x GT) to CSV + PNG.
     """
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents = True, exist_ok = True)
 
     for style, matrix in confusion_by_style.items():
 
@@ -126,7 +126,7 @@ def write_confusion_matrices(confusion_by_style: Dict, output_dir: Path):
         # --------------------------------------------------------------
 
         csv_path = output_dir / f"step2_confusion_{style}.csv"
-        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        with open(csv_path, "w", newline = "", encoding = "utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["GT\\HTR"] + htr_chars)
             for g, row in zip(gt_chars, dense):
@@ -136,12 +136,12 @@ def write_confusion_matrices(confusion_by_style: Dict, output_dir: Path):
         # PNG heatmap
         # --------------------------------------------------------------
 
-        plt.figure(figsize=(12, 10))
+        plt.figure(figsize = (12, 10))
         plt.imshow(dense)
         plt.colorbar()
-        plt.xticks(range(len(htr_chars)), htr_chars, rotation=90)
+        plt.xticks(range(len(htr_chars)), htr_chars, rotation = 90)
         plt.yticks(range(len(gt_chars)), gt_chars)
-        plt.title(f"Step 2 Confusion Matrix – {style}")
+        plt.title(f"Step 2 Confusion Matrix - {style}")
         plt.tight_layout()
 
         png_path = output_dir / f"step2_confusion_{style}.png"

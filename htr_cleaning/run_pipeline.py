@@ -5,17 +5,17 @@ Main entrypoint for the HTR cleaning pipeline.
 
 This script runs the full end-to-end workflow:
 
-1. Pair HTR files with ground truths and create train/test splits
-2. Run Step 1 preprocessing and surface tagging
-3. Run Step 2 character-level alignment and confusion analysis
+1. Pair HTR files with ground truth (GT) files and create train/test split
+2. Run Step 1 preprocessing and basic tagging
+3. Run Step 2 character-level alignment and confusion matrix analysis
 4. Run Step 3 heuristic linguistic tagging
 5. Run posthoc overlap analysis
 
-Non-technical users only need to execute:
+To run the entire pipeline:
 
     python run_pipeline.py
 
-All pipeline stages are deterministic and write explicit outputs to disk.
+Every stage of the pipeline should produce reproducible results. Outputs are saved as structured files.
 """
 
 from pipeline.run_split import run_split

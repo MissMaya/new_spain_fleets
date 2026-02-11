@@ -1,15 +1,15 @@
 """
 processing.py
 
-Core processing functions for the HTR cleaning pipeline.
+Processing functions for the HTR cleaning pipeline.
 
 Supports:
 
-- Step 1: regex-based surface anomaly detection
-- Step 2: full-text GT↔HTR alignment
+- Step 1: regex-based basic anomaly detection
+- Step 2: full-text GT<->HTR alignment
 - Step 3: linguistic / paleographic heuristics
 
-Responsibilities:
+Used to:
 - Apply tagging rules
 - Compute spans and line numbers
 - Log detected issues
@@ -37,7 +37,7 @@ def _compute_line_offsets(text: str) -> List[int]:
     """
     Return a list of absolute character offsets for the start of each line.
     """
-    lines = text.splitlines(keepends=True)
+    lines = text.splitlines(keepends = True)
     offsets: List[int] = []
     pos = 0
     for ln in lines:
@@ -89,7 +89,7 @@ def process_step1_issues(
 
     Writes per-document issues.json and returns:
       - error_counts_by_style
-      - step1_spans_by_file (absolute spans for downstream overlap logic)
+      - step1_spans_by_file (spans used to compute overlaps)
     """
 
     error_counts_by_style = {style: defaultdict(int) for style in calligraphy_types}
@@ -105,7 +105,6 @@ def process_step1_issues(
 
         issues = []
 
-        # step1_tags is: { "G": regex, ... }
         for code, regex in step1_tags.items():
             for match in regex.finditer(text):
                 start = match.start()
@@ -143,7 +142,7 @@ def process_step1_issues(
                 error_counts_by_style[style][tag] += 1
 
         doc_dir = logs_dir / style / doc_id
-        doc_dir.mkdir(parents=True, exist_ok=True)
+        doc_dir.mkdir(parents = True, exist_ok = True)
         safe_write_json(issues, doc_dir / "issues.json")
 
     return error_counts_by_style, step1_spans_by_file
@@ -160,19 +159,19 @@ def process_step2_issues(
     logs_dir: Path,
 ):
     """
-    Step 2: align GT↔HTR and emit S2X/S2I/S2D issues.
+    Step 2: align GT<->HTR and tag with Step 2 tags.
 
     Returns:
-      - confusion_by_style (GT char × HTR char, including Ø)
-      - overlap_metadata (S1↔S2)
-      - step2_spans_by_file (absolute spans for downstream overlap logic)
+      - confusion_by_style (GT char x HTR char, including Ø for deletion)
+      - overlap_metadata (S1<->S2)
+      - step2_spans_by_file (spans for working out overlaps)
     """
 
     confusion_by_style = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     overlap_totals = defaultdict(int)
     overlap_by_style = defaultdict(lambda: defaultdict(int))
 
-    # IMPORTANT: downstream overlap logic expects start/end keys
+    # IMPORTANT: overlap logic expects start/end keys
     step2_spans_by_file = defaultdict(list)
 
     for pair in train_pairs:
@@ -199,7 +198,7 @@ def process_step2_issues(
             issue["tag"] = full_tag
             issue["description"] = tag_schema["S2"][raw_tag]
 
-            # --- unify to canonical schema ---
+            # --- unify to schema ---
             start = issue.pop("start")
             end = issue.pop("end")
             issue["_abs_start"] = start
@@ -240,7 +239,7 @@ def process_step2_issues(
                 h = htr_seg[i] if i < len(htr_seg) else NULL_CHAR
                 confusion_by_style[style][g][h] += 1
 
-            # Overlap tracking (S1↔S2)
+            # Overlap tracking (S1<->S2)
             if issue["overlaps_step1"]:
                 overlap_totals["total"] += 1
                 overlap_by_style[style]["total"] += 1
@@ -271,7 +270,7 @@ def process_step3_issues(
     logs_dir: Path,
 ):
     """
-    Step 3: apply heuristic regex rules to HTR and compute overlaps with Step 1/2.
+    Step 3: apply linguistic/paleographic rules to HTR and compute overlaps with Steps 1/2.
 
     Returns:
       - error_counts_by_style
@@ -339,10 +338,10 @@ def process_step3_issues(
                 }
 
                 log_issue(
-                    logs_dir=logs_dir,
-                    calligraphy_type=style,
-                    document_id=doc_id,
-                    issue=issue,
+                    logs_dir = logs_dir,
+                    calligraphy_type = style,
+                    document_id = doc_id,
+                    issue = issue,
                 )
 
                 error_counts_by_style[style][full_tag] += 1
@@ -354,7 +353,7 @@ def process_step3_issues(
                     s2_s3_overlap[style][t] += 1
 
     posthoc_dir = logs_dir / "posthoc"
-    posthoc_dir.mkdir(parents=True, exist_ok=True)
+    posthoc_dir.mkdir(parents = True, exist_ok = True)
 
     safe_write_json(
         {k: dict(v) for k, v in s1_s3_overlap.items()},

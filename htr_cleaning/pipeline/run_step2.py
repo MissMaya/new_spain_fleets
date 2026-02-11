@@ -1,16 +1,16 @@
 """
 run_step2.py
 
-Pipeline stage for Step 2: character-level GT–HTR alignment.
+Pipeline stage for Step 2: Runs character-level HTR-GT alignment.
 
 This stage:
 
-- Loads training HTR–GT pairs
+- Loads training HTR-GT pairs
 - Reloads Step 1 spans from logs (for reproducibility)
 - Performs full-text alignment
-- Logs Step 2 issues (S2X / S2I / S2D)
+- Logs Step 2 issues (S2X => substitution / S2I => insertion / S2D => deletion)
 - Computes confusion matrices by calligraphy style
-- Writes S1↔S2 overlap metadata
+- Writes S1<->S2 overlap metadata
 - Produces CSV + PNG confusion matrices
 
 Typical usage:
@@ -91,7 +91,7 @@ def run_step2():
     tag_schema = read_json(SCHEMAS_DIR / "tag_schema.json")
 
     # ------------------------------------------------------------------
-    # Reload Step 1 spans from disk (schema-driven)
+    # Reload Step 1 spans
     # ------------------------------------------------------------------
 
     step1_spans_by_file = _load_step1_spans(tag_schema)
@@ -101,10 +101,10 @@ def run_step2():
     # ------------------------------------------------------------------
 
     confusion_by_style, overlap_metadata, step2_spans_by_file = process_step2_issues(
-        train_pairs=train_pairs,
-        step1_spans_by_file=step1_spans_by_file,
-        tag_schema=tag_schema,
-        logs_dir=LOGS_DIR,
+        train_pairs = train_pairs,
+        step1_spans_by_file = step1_spans_by_file,
+        tag_schema = tag_schema,
+        logs_dir = LOGS_DIR,
     )
 
     # ------------------------------------------------------------------

@@ -3,15 +3,15 @@ file_io.py
 
 Shared filesystem and JSON utilities for the HTR cleaning pipeline.
 
-This module centralises:
+This module ensures:
 
 - consistent UTF-8 JSON and text reads
 - automatic parent-directory creation
-- safe (atomic) writes so output files are never left in a broken or
+- safe ("atomic") writes so output files are never left in a broken or
   partially-written state
 - simple filesystem indexing helpers
 
-Pipeline stages import these helpers rather than reimplementing them.
+Pipeline stages import these helpers.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def ensure_parent(path: Path) -> None:
     """
     Ensure parent directory exists.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents = True, exist_ok = True)
 
 
 # ---------------------------------------------------------------------
@@ -40,7 +40,7 @@ def read_json(path: Path) -> Any:
     """
     Read UTF-8 JSON file.
     """
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding = "utf-8") as f:
         return json.load(f)
 
 
@@ -56,8 +56,8 @@ def write_json(obj: Any, path: Path, indent: int = 2, ensure_ascii: bool = False
     Write JSON (non-atomic).
     """
     ensure_parent(path)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, indent=indent, ensure_ascii=ensure_ascii)
+    with open(path, "w", encoding = "utf-8") as f:
+        json.dump(obj, f, indent = indent, ensure_ascii = ensure_ascii)
 
 
 def safe_write_json(obj: Any, path: Path, indent: int = 2, ensure_ascii: bool = False) -> None:
@@ -73,8 +73,8 @@ def safe_write_json(obj: Any, path: Path, indent: int = 2, ensure_ascii: bool = 
 
     tmp = path.with_suffix(path.suffix + ".tmp")
 
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(obj, f, indent=indent, ensure_ascii=ensure_ascii)
+    with open(tmp, "w", encoding = "utf-8") as f:
+        json.dump(obj, f, indent = indent, ensure_ascii = ensure_ascii)
 
     tmp.replace(path)
 
@@ -99,7 +99,7 @@ def safe_write_text(content: str, path: Path) -> None:
     ensure_parent(path)
 
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
+    tmp.write_text(content, encoding = "utf-8")
     tmp.replace(path)
 
 

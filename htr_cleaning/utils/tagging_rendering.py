@@ -1,21 +1,21 @@
 """
 tagging_rendering.py
 
-Render detected issues (Steps 1–3) inline into HTR transcripts for human review.
+Render detected issues (Steps 1-3) inline into HTR transcripts for human review.
 
-Goals
+Aims
 -----
-Tags produced by this module are:
+Produce tags that are:
 
 - Human-readable: reviewers can scan and search easily.
 - Machine-parseable: deterministic, consistent syntax.
 - Unambiguous: every tag includes its step + code (e.g. S1G, S2X).
 - Nested-safe: tags are properly opened/closed and rendering is deterministic.
-- Reviewer-friendly: optional short descriptions can be included in the opening tag.
+- Reviewer-friendly: optional short descriptions included in the opening tag.
 
 Tag format
 ----------
-By default, issues are rendered as balanced bracket tags:
+Issues are rendered as follows:
 
     [S1G]...[/S1G]
     [S2D]Ø[/S2D]        # deletions (zero-length spans) render as Ø
@@ -25,7 +25,7 @@ Optionally, opening tags can include a description:
 
     [S1G|Non-Latin glyph]...[/S1G]
 
-Assumptions about issue objects
+Assumptions
 -------------------------------
 Each issue dict must contain:
 - "tag": str  (e.g. "S1G", "S2X", "S3Q")
@@ -36,7 +36,8 @@ Optional fields:
 - "desc": str  (free text to show in opening tag; if absent, a schema lookup may be used)
 - "id": str/int (deterministic issue id; not required for rendering)
 
-This module does not modify issue logs; it only renders tags into text.
+This module does only renders tags into the text using issue logs.
+The logs themselves are not modified by the tag insertion.
 """
 
 from __future__ import annotations
@@ -47,12 +48,12 @@ from typing import Dict, Iterable, List, Optional, Tuple
 from utils.file_io import read_json, read_text, safe_write_text
 from utils.config import SCHEMAS_DIR
 
-# Use the same null char across the project (Step 2 deletions)
+# Null char is the same as used for Step 2 deletions
 NULL_CHAR = "Ø"
 
 
 # ---------------------------------------------------------------------
-# Tag schema loading (optional)
+# Tag schema loading
 # ---------------------------------------------------------------------
 
 def load_tag_schema(schema_path: Optional[Path] = None) -> Dict[str, Dict[str, str]]:
@@ -125,7 +126,7 @@ def render_tags_for_text(
     """
     Render issues into a provided text string.
 
-    Notes on correctness / nested-safety
+    Notes on method of insertion
     -----------------------------------
     - Insertions are applied from the bottom up (descending offsets) so earlier
       insertions do not shift later offsets.
@@ -135,9 +136,10 @@ def render_tags_for_text(
           [TAG]Ø[/TAG]
       at that position.
 
-    If spans overlap, tags may become nested. Rendering remains well-formed because
-    we always insert close tokens at the end index and open tokens at the start
-    index, and we apply all insertions from right to left.
+    If spans overlap, tags may become nested. 
+    Rendering should remain well-formed even with nesting because:
+        - Close tokens are always inserted at the end index and open tokens at the start index
+        - All inseertions are applied from right to left.
     """
 
     tag_schema = tag_schema or {}
@@ -163,14 +165,14 @@ def render_tags_for_text(
             inserts.append((start, open_tok))
             inserts.append((end, close_tok))
 
-    # Sort by position descending; at same position, insert longer tokens first
-    # to keep deterministic output.
-    inserts.sort(key=lambda x: (x[0], len(x[1])), reverse=True)
+    # Sort by position descending
+    # At same position, insert longer tokens first to keep deterministic output.
+    inserts.sort(key = lambda x: (x[0], len(x[1])), reverse = True)
 
     tagged = text
     for pos, token in inserts:
         if pos > len(tagged):
-            # Defensive: skip out-of-range issues (shouldn't happen if offsets are correct)
+            # Skip out-of-range issues (shouldn't happen if offsets are correct)
             continue
         tagged = tagged[:pos] + token + tagged[pos:]
 
@@ -188,10 +190,10 @@ def render_tags_for_document(
     """
     text = read_text(htr_path)
     return render_tags_for_text(
-        text=text,
-        issues=issues,
-        tag_schema=tag_schema,
-        include_descriptions=include_descriptions,
+        text = text,
+        issues = issues,
+        tag_schema = tag_schema,
+        include_descriptions = include_descriptions,
     )
 
 
@@ -236,7 +238,7 @@ def render_tagged_corpus(
     """
     tag_schema = load_tag_schema(schema_path)
 
-    output_root.mkdir(parents=True, exist_ok=True)
+    output_root.mkdir(parents = True, exist_ok = True)
 
     from utils.file_io import load_json_if_exists
 
@@ -252,14 +254,14 @@ def render_tagged_corpus(
             continue
 
         tagged_text = render_tags_for_document(
-            htr_path=htr_path,
-            issues=issues,
-            tag_schema=tag_schema,
-            include_descriptions=include_descriptions,
+            htr_path = htr_path,
+            issues = issues,
+            tag_schema = tag_schema,
+            include_descriptions = include_descriptions,
         )
 
         out_dir = output_root / style
-        out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir.mkdir(parents = True, exist_ok = True)
 
         out_path = out_dir / f"{doc_id}.txt"
         safe_write_text(tagged_text, out_path)

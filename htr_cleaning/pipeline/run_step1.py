@@ -1,7 +1,7 @@
 """
 run_step1.py
 
-Pipeline Stage 1: Basic preprocessing and normalisation of HTR transcriptions.
+Pipeline Stage 1: Runs basic preprocessing and normalisation of HTR transcriptions.
 """
 
 from utils.config import LOGS_DIR, SCHEMAS_DIR
@@ -47,11 +47,11 @@ def run_step1():
     # ------------------------------------------------------------------
 
     error_counts_by_style, _ = process_step1_issues(
-        train_pairs=train_pairs,
-        step1_tags=all_step1_tags,
-        tag_schema=tag_schema,
-        calligraphy_types=calligraphy_types,
-        logs_dir=LOGS_DIR,
+        train_pairs = train_pairs,
+        step1_tags = all_step1_tags,
+        tag_schema = tag_schema,
+        calligraphy_types = calligraphy_types,
+        logs_dir = LOGS_DIR,
     )
 
     # ------------------------------------------------------------------
@@ -59,9 +59,9 @@ def run_step1():
     # ------------------------------------------------------------------
 
     generate_all_outputs(
-        error_counts_by_style=error_counts_by_style,
-        step_name="step1",
-        output_dir=LOGS_DIR / "step_summaries",
+        error_counts_by_style = error_counts_by_style,
+        step_name = "step1",
+        output_dir = LOGS_DIR / "step_summaries",
     )
 
     print("Step 1 complete.")

@@ -1,17 +1,17 @@
 """
 run_split.py
 
-Prepare dataset for HTR cleaning:
+Script prepares for HTR cleaning by:
 
-- Download + unzip raw corpora (only when changed)
-- Pair HTR with GT
-- Maintain stable train/test split
-- Add new files deterministically
-- Invalidate cached splits if upstream ZIPs change
+- Downloading + unzipping raw corpora (only on first run or when there is a change to repo size)
+- Pairing HTR with GT
+- Maintaining a stable train/test split
+- Adding new files deterministically
+- Invalidating cached splits if the repo changes in size
 
-Guarantees:
+Note that:
 
-- Existing splits never change unless ZIPs update upstream.
+- Existing splits never change unless the repo changes upstream (files are added to/deleted from the repo).
 - New documents are added deterministically.
 """
 
@@ -28,6 +28,7 @@ from utils.file_io import read_json, safe_write_json, load_json_if_exists, index
 
 META_DIR = LOGS_DIR / "meta"
 
+# TODO FLAG: CHANGE TO REMOVE HARDCODING - CALLIGRAPHY TYPES SHOULD READ FROM MANIFEST 
 CALLIGRAPHY_TYPES = ["encadenada", "italica_cursiva", "procesal", "redonda"]
 LOW_COUNT_THRESHOLD = 10
 
@@ -36,7 +37,7 @@ LOW_COUNT_THRESHOLD = 10
 # Helpers
 # ---------------------------------------------------------------------
 
-def _stable_assign(key: str, test_ratio=0.2):
+def _stable_assign(key: str, test_ratio = 0.2):
     h = hashlib.md5(key.encode("utf-8")).hexdigest()
     value = int(h[:8], 16) / 0xFFFFFFFF
     return "test" if value < test_ratio else "train"
@@ -46,7 +47,7 @@ def _basename(path: Path):
     """
     Extract pairing key from filename.
 
-    Pairing is defined purely by removing the terminal _HTR.txt or _GT.txt.
+    Pairs are identified by removing the terminal _HTR.txt or _GT.txt.
 
     Examples:
         AGI_INDIFERENTE_2065_N45_HTR.txt   -> AGI_INDIFERENTE_2065_N45
@@ -71,8 +72,8 @@ def ensure_raw_data():
 
     zips_dir = PROJECT_ROOT / "zips"
     raw_dir = PROJECT_ROOT / "data" / "raw"
-    zips_dir.mkdir(parents=True, exist_ok=True)
-    raw_dir.mkdir(parents=True, exist_ok=True)
+    zips_dir.mkdir(parents = True, exist_ok = True)
+    raw_dir.mkdir(parents = True, exist_ok = True)
 
     zip_meta_path = META_DIR / "zip_metadata.json"
     zip_meta = load_json_if_exists(zip_meta_path, {})
@@ -115,7 +116,7 @@ def ensure_raw_data():
 
         if not unzip_to.exists() or not any(unzip_to.iterdir()) or updated:
             print(f"Extracting {name}...")
-            unzip_to.mkdir(parents=True, exist_ok=True)
+            unzip_to.mkdir(parents = True, exist_ok = True)
             with zipfile.ZipFile(zip_path, "r") as z:
                 z.extractall(unzip_to)
 
@@ -132,10 +133,10 @@ def ensure_raw_data():
 # Main
 # ---------------------------------------------------------------------
 
-def run_split(test_ratio=0.2):
-    print("Starting HTR–GT pairing and stratified split...")
+def run_split(test_ratio = 0.2):
+    print("Starting HTR-GT pairing and stratified split...")
 
-    META_DIR.mkdir(parents=True, exist_ok=True)
+    META_DIR.mkdir(parents = True, exist_ok = True)
     ensure_raw_data()
 
     htr_files = {s: index_txt_files(RAW_DIR / s) for s in CALLIGRAPHY_TYPES}
@@ -164,7 +165,7 @@ def run_split(test_ratio=0.2):
         if base not in htr_ids:
             missing_htr.append(str(gt))
 
-    paired.sort(key=lambda p: (p["style"], p["id"]))
+    paired.sort(key = lambda p: (p["style"], p["id"]))
 
     train_path = META_DIR / "train_pairs.json"
     test_path = META_DIR / "test_pairs.json"
@@ -223,7 +224,7 @@ def run_split(test_ratio=0.2):
     }, META_DIR / "split_metadata.json")
 
     csv_path = META_DIR / "htr_index.csv"
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+    with open(csv_path, "w", newline = "", encoding = "utf-8") as f:
         w = csv.writer(f)
         w.writerow(["id", "style", "split"])
         for p in train_pairs:

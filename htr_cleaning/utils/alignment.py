@@ -1,9 +1,9 @@
 """
 alignment.py
 
-Character-level alignment utilities for Step 2 of the HTR cleaning pipeline.
+Utilities to achieve character-level alignment for Step 2 of the HTR cleaning pipeline.
 
-This module aligns full GT and HTR documents using difflib and tags:
+Aligns GT and HTR documents using difflib and tags:
 
 - X : substitution (GT → HTR)
 - I : insertion (Ø → HTR)
@@ -11,14 +11,16 @@ This module aligns full GT and HTR documents using difflib and tags:
 
 Key properties:
 
-- Alignment is performed on full documents (not line-by-line), this allows for
-  line breaks to differ between GT and HTR (highly, highly, highly likely).
-- All issues are reported as character spans in HTR global coordinates.
-- Deletions are anchored explicitly at an insertion point.
+- Alignment is performed on full documents (not line-by-line) to allow for
+  line breaks to differ between GT and HTR. I've seen differing line breaks when 
+  comparing multiple GT and HTR files so I know that this will be a common feauture 
+  in this dataset.
+- All issues are reported as character spans.
+- Deletions are anchored at an insertion point.
 - Line numbers are reconstructed after alignment.
 - Step 1 / Step 2 coupling is computed via span overlap.
 
-Returned issues are in the form of Python dictionaries suitable for JSON logging.
+Issues are returned as Python dictionaries suitable for JSON logging.
 """
 
 import difflib
@@ -86,8 +88,7 @@ def align_and_tag(
     htr_text : str
         HTR document (full text).
 
-    step1_spans : list of dict
-        Step 1 issues for this file. Each dict must contain:
+    step1_spans : list of dict Step 1 issues for this file. Each dict must contain:
             - start (global HTR offset)
             - end (global HTR offset)
             - tag
@@ -98,7 +99,7 @@ def align_and_tag(
 
         Each issue has:
 
-        - tag : "X", "I", or "D"
+        - tag : "X" (substitution), "I" (insertion), or "D" (deletion)
         - start : global HTR start offset
         - end : global HTR end offset (may be the same as start in the case of deletions)
         - gt : GT substring (or "")
@@ -119,7 +120,7 @@ def align_and_tag(
         if tag == "equal":
             continue
 
-        # GT and HTR substrings involved in this operation
+        # GT and HTR substrings
         gt_seg = gt_text[i1:i2]
         htr_seg = htr_text[j1:j2]
 

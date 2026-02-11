@@ -1,9 +1,9 @@
 """
 config.py
 
-Centralised configuration and directory layout for the HTR cleaning pipeline.
+Configures directory layout for the HTR cleaning pipeline.
 
-Defines canonical project paths relative to this file and ensures that all
+Defines project paths relative to this file and ensures that all
 required directories exist.
 
 All pipeline stages and utilities should import paths from this module.
@@ -46,6 +46,7 @@ STEP_SUMMARIES_DIR = LOGS_DIR / "step_summaries"
 # Ensure directory structure exists
 # ----------------------------------------------------------------------
 
+# TODO FLAG: THIS COULD BE IMPROVED ON TO GET RID OF HARDCODED LIST
 for d in [
     DATA_DIR,
     RAW_DIR,

@@ -1,10 +1,10 @@
 """
 tag_rules.py
 
-Regex-based rule definitions for transcription error tagging.
+Regex-based rules for transcription error tagging in steps 1 and 3.
 
 Step 1:
-- Surface / formatting anomalies (whitespace, punctuation, glyphs)
+- Basic anomalies (whitespace, repeated punctuation, glyphs)
 
 Step 3:
 - Linguistic / paleographic heuristics
@@ -12,7 +12,7 @@ Step 3:
 All rules are expressed as compiled regular expressions so that
 precise character spans can be recorded for each detected issue.
 
-Step 2 (character alignment) lives in utils/alignment.py.
+Step 2 tagging (character alignment) can be found under utils/alignment.py.
 """
 
 import regex as re
@@ -50,7 +50,7 @@ all_step1_tags = {
 # ----------------------------------------------------------------------
 
 # Q not followed by E or I
-QU_NOT_EI = re.compile(r"\bQ(?![EI])", re.IGNORECASE)
+QU_NOT_EI = re.compile(r"QU(?![EI])", re.IGNORECASE)
 
 # Presence of W or K
 W_OR_K = re.compile(r"[WK]", re.IGNORECASE)

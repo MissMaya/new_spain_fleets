@@ -1,7 +1,7 @@
 """
 issue_ids.py
 
-Assign deterministic, stable IDs to detected issues AFTER Steps 1–3.
+Assign deterministic, stable IDs to detected issues AFTER tagging Steps 1-3.
 
 This is a post-pass over existing logs.
 
@@ -11,16 +11,15 @@ Reads:
 Writes:
     logs/<style>/<doc_id>/issues_with_ids.json
 
-Design principles:
+Works as follows:
 
 - Original issues.json is NEVER modified.
 - IDs depend ONLY on document-local content:
     doc_id, step, tag, start, end, line, gt, htr
-- Canonical sorting ensures repeatability.
-- Duplicate identical issues are disambiguated by occurrence index.
+- Ensures consistent, repeatable ordering.
+- Each occurrence is given a unique index so that repeats of the same issue can be tracked independently.
 - Adding new documents never changes IDs of existing ones.
 
-This module performs no detection.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ import hashlib
 from utils.config import LOGS_DIR
 from utils.file_io import load_json_if_exists, safe_write_json
 
-
+# TODO FLAG: COULD BE IMPROVED TO STOP HARDCODING => SHOULD READ DIRECTLY FROM SCHEMA
 S1_TAGS = {"L", "T", "W", "SP", "C", "P", "G", "M", "MP"}
 S2_TAGS = {"X", "I", "D"}
 
@@ -71,7 +70,7 @@ def assign_issue_ids_for_doc(doc_id: str, issues: List[Dict]) -> List[Dict]:
     Original issue dicts are not modified.
     """
 
-    # Canonical ordering so duplicates are handled deterministically
+    # A fixed processing order ensures identical issues are treated consistently across runs.
     def sort_key(i: Dict):
         return (
             i.get("start", -1),
