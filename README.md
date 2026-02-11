@@ -74,16 +74,16 @@ Tagged transcript rendering
 ```
 📂 htr_cleaning/
 │
-├── 📁 data/                                 # Runtime data (can be safely deleted with reset script)
+├── 📁 data/                                 # Runtime data
 │   │
-│   ├── 📁 raw/                              # Downloaded + extracted source corpora
-│   │   ├── 📁 encadenada/                   # HTR files (grouped by document subfolders)
-│   │   ├── 📁 italica_cursiva/
-│   │   ├── 📁 procesal/
-│   │   ├── 📁 redonda/
-│   │   └── 📁 ground_truths/                # GT files (mirrors HTR folder structure)
+│   ├── 📁 raw/                              # Downloaded + extracted data
+│   │   ├── 📁 encadenada/                   # HTR for Encadenada
+│   │   ├── 📁 italica_cursiva/              # HTR for Italica Cursiva           
+│   │   ├── 📁 procesal/                     # HTR for Procesal
+│   │   ├── 📁 redonda/                      # HTR for Redonda   
+│   │   └── 📁 ground_truths/                # GT files
 │   │
-│   ├── 📁 tagged/                           # HTR copies with inline [SxTAG] markup (review stage)
+│   ├── 📁 tagged/                           # Tagged versions of HTR
 │   │   ├── 📁 encadenada/
 │   │   ├── 📁 italica_cursiva/
 │   │   ├── 📁 procesal/
