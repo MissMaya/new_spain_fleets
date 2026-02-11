@@ -160,14 +160,21 @@ Tagged transcript rendering
 │   ├── tag_rules.py                         # Regex definitions Step 1 + Step 3
 │   ├── tagging_rendering.py                 # Inline tag insertion into copies of transcripts
 │   ├── visualise.py                         # Charts + summary exports
-│   ├── posthoc_analysis.py                  # Cross-stage overlap analysis
+│   ├── posthoc_analysis.py                  # Overlap analysis
 │   └── delete.py                            # Developer reset utility
 │
-├── README.md                                # Project overview + usage instructions
+├── README.md                               
 └── requirements.txt                         # Python dependencies
 ```
 
-## How to Run It
+## How to Run the Pipeline
+
+
+## How to Reset the Pipeline 
+
+
+
+
 Deterministic Data Management HEADING
 Stable Train/Test Splits
 
