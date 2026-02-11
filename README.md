@@ -173,8 +173,26 @@ Tagged transcript rendering
 ## How to Run the Pipeline
 
 ### To run the whole pipeline
-From project root
+From project root:
+```
+python run_pipeline.py
+```
+This will generate:
+1. Dataset pairing + split
+2. Step 1 basic error detection
+3. Step 2 HTR-GT alignment
+4. Step 3 heuristics
+5. Posthoc analysis
+6. Summary outputs
 
+### To run individual stages
+Must be run in order:
+```
+python pipeline/run_split.py
+python pipeline/run_step1.py
+python pipeline/run_step2.py
+python pipeline/run_step3.py
+```
 
 ## How to Reset the Pipeline 
 To erase any generated data and start from scratch, run:
@@ -190,6 +208,26 @@ This will delete:
 3. logs/
 4. outputs/
 
+## Posthoc Analysis
+We compute any overlaps between: 
+
+- Step 1 ↔ Step 2, 
+- Step 1 ↔ Step 3, 
+- Step 2 ↔ Step 3
+- Per-style total overlaps
+- Overall total overlaps
+
+These are output to ```logs/posthoc```
+
+Assessing overlaps allows for theassessment of 
+
+These allow researchers to assess:
+
+Which formatting errors are OCR-driven?
+
+Which heuristic flags correlate with alignment errors?
+
+Which calligraphy styles produce more instability?
 ## Further Technical Details
 
 ### Detailed Architecture
