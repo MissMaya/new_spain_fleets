@@ -167,13 +167,32 @@ Tagged transcript rendering
 └── requirements.txt                         # Python dependencies
 ```
 
+## How to Install
+
+
 ## How to Run the Pipeline
+
+### To run the whole pipeline
+From project root
 
 
 ## How to Reset the Pipeline 
+To erase any generated data and start from scratch, run:
+```
+python - <<'EOF'
+from utils.delete import reset_project_data
+reset_project_data()
+EOF
+```
+This will delete:
+1. zips/
+2. data/
+3. logs/
+4. outputs/
 
+## Further Technical Details
 
-
+### Detailed Architecture
 
 Deterministic Data Management HEADING
 Stable Train/Test Splits
