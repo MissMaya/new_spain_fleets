@@ -105,7 +105,7 @@ Tagged transcript rendering
 │   │   ├── missing_htr.json                 # GTs with no HTR match
 │   │   ├── pairing_summary.json             # Per-style pair counts
 │   │   ├── split_metadata.json              # Split stats
-│   │   └── htr_index.csv                    # Human-readable index of corpus by calligraphy style
+│   │   └── htr_index.csv                    # Index of corpus by calligraphy style
 │   │
 │   ├── 📁 step_summaries/                   # Per-stage aggregate outputs
 │   │   ├── step1_summary.json
@@ -117,7 +117,7 @@ Tagged transcript rendering
 │   │   ├── step3_summary.csv
 │   │   └── step3_<style>.png
 │   │
-│   ├── 📁 posthoc/                          # Cross-stage analytical outputs
+│   ├── 📁 posthoc/                          # Analysis of overlaps
 │   │   ├── s1_s2_overlap.json
 │   │   ├── s1_s3_overlap.json
 │   │   ├── s2_s3_overlap.json
@@ -125,40 +125,40 @@ Tagged transcript rendering
 │   │   ├── posthoc_summary.csv
 │   │   └── posthoc_overlap_rates.png
 │   │
-│   ├── 📁 encadenada/                       # Per-document issue logs (canonical logs)
+│   ├── 📁 encadenada/                       # Per-document issue logs for all steps
 │   │   └── 📁 <document_id>/
-│   │       └── issues.json                  # Unified issue schema (Step 1/2/3 combined)
+│   │       └── issues.json                 
 │   │
 │   ├── 📁 italica_cursiva/
 │   ├── 📁 procesal/
 │   └── 📁 redonda/
 │
-├── 📁 zips/                                 # Downloaded corpus archives (auto-managed)
+├── 📁 zips/                                 # Downloaded corpus
 │   ├── encadenada.zip
 │   ├── italica_cursiva.zip
 │   ├── procesal.zip
 │   ├── redonda.zip
 │   └── ground_truths.zip
 │
-├── 📁 schemas_and_manifests/                # Project specifications (source-of-truth definitions)
+├── 📁 schemas_and_manifests/                # Project specifications
 │   ├── zip_manifest.json                    # Dataset URLs + unzip targets
 │   └── tag_schema.json                      # Definitions of S1 / S2 / S3 tags
 │
-├── 📁 pipeline/                             # Orchestration scripts (stage runners)
-│   ├── run_split.py                         # Pairing + stable stratified split
-│   ├── run_step1.py                         # Surface anomaly detection
+├── 📁 pipeline/                             # Orchestration scripts
+│   ├── run_split.py                         # Pairing + stratified split
+│   ├── run_step1.py                         # Basic anomaly detection
 │   ├── run_step2.py                         # Character-level GT–HTR alignment
 │   ├── run_step3.py                         # Linguistic heuristic tagging
-│   └── run_pipeline.py                      # Master pipeline runner
+│   └── run_pipeline.py                      # Run entire pipeline
 │
-├── 📁 utils/                                # Core reusable logic
+├── 📁 utils/                                # Core reusable logic lives here
 │   ├── config.py                            # Global paths and constants
 │   ├── file_io.py                           # Safe JSON/text IO utilities
-│   ├── logging.py                           # Canonical issue logging
-│   ├── processing.py                        # Core detection logic (Steps 1–3)
-│   ├── alignment.py                         # Character alignment engine
-│   ├── tag_rules.py                         # Regex definitions for Step 1 + Step 3
-│   ├── tagging_rendering.py                 # Inline [SxTAG] insertion into transcripts
+│   ├── logging.py                           # Issue logging
+│   ├── processing.py                        # Error detection logic for all steps
+│   ├── alignment.py                         # Character alignment
+│   ├── tag_rules.py                         # Regex definitions Step 1 + Step 3
+│   ├── tagging_rendering.py                 # Inline tag insertion into copies of transcripts
 │   ├── visualise.py                         # Charts + summary exports
 │   ├── posthoc_analysis.py                  # Cross-stage overlap analysis
 │   └── delete.py                            # Developer reset utility
