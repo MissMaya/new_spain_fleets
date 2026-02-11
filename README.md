@@ -1,1 +1,472 @@
-# new_spain_fleets
+# HTR Cleaning Pipeline Part 1
+## Overview
+
+This is a 3-step pipeline that performs heuristic and deterministic analysis in order to evaluate how closely Handwritten Text Recognition (HTR) transcriptions match their corresponding Ground Truth (GT) files. 
+
+The pipeline has been developed to work on HTR-GT pairings from the New Spain Fleets project but could be repurposed to work on other HTR-GT corpora. We intend for findings from this pipeline e.g. from analysing the frequency of different error types to inform a downstream machine-learning process in which models are fine-tuned to clean HTR transcripts.  
+
+The pipleline is set up as follows:
+
+- **Step 1** basic transcription errors e.g. whitespace, repeated punctuation, unexpected characters.
+
+- **Step 2** character-level analysis of HTRs vs GTs.
+
+- **Step 3** linguistically or paleographically implausible patterns e.g. (for Spanish) "qu" not followed by "e" or "i" or words beginning with "w" or "k".
+
+Note that the pipeline does not auto-correct text. Instead, it:
+
+- Detects transcription anomalies
+
+- Logs them for human review
+
+- Identifies cross-stage relationships e.g. where an error identified in step 1 may be the result of an error identified in step 2. This could occur where e.g. multiple whitespace in the middle of a word flagged in Step 1 is actually the result of the failure of the HTR to transcribe a word fully, which would be identified as a Step 2 error.
+
+Any corrections to HTRs are only made post human-review.
+
+## Why 3 Steps?
+
+This pipeline goes beyond the straight comparison of HTRs with GTs because:
+
+- Not all errors are HTR-GT alignment errors.
+
+- GTs may not always be available so there should be other methods of flagging potential errors.
+
+- Organising errors into structured categories should produce better signals for downstream machine learning. 
+
+- The end use for this work is in humanities research, which necessitates room for interpretability and not just the flagging of differences between sources. 
+
+## Workflow
+
+To recap the 3 stages of the pipeline:
+
+| Step   | Type                          | Purpose                                                       |
+|--------|-------------------------------|---------------------------------------------------------------|
+| Step 1 | Basic transcription           | Whitespace, punctuation irregularities, Unicode anomalies    |
+| Step 2 | HTR–GT character alignment    | Insertions, deletions, substitutions                          |
+| Step 3 | Linguistic heuristics         | Implausible orthographic or paleographic patterns             |
+
+- Running each stage adds to  produces structured issue logs.
+
+- None of the stages automatically modify text.
+
+## High-Level Architecture
+
+```
+Raw ZIP datasets
+        ↓
+run_split.py
+        ↓
+Stable train/test split
+        ↓
+run_step1.py
+        ↓
+run_step2.py
+        ↓
+run_step3.py
+        ↓
+posthoc_analysis.py
+        ↓
+Tagged transcript rendering
+```
+
+## Directory Structure
+
+```
+📂 htr_cleaning/
+│
+├── 📁 data/                                 # Runtime data (can be safely deleted with reset script)
+│   │
+│   ├── 📁 raw/                              # Downloaded + extracted source corpora
+│   │   ├── 📁 encadenada/                   # HTR files (grouped by document subfolders)
+│   │   ├── 📁 italica_cursiva/
+│   │   ├── 📁 procesal/
+│   │   ├── 📁 redonda/
+│   │   └── 📁 ground_truths/                # GT files (mirrors HTR folder structure)
+│   │
+│   ├── 📁 tagged/                           # HTR copies with inline [SxTAG] markup (review stage)
+│   │   ├── 📁 encadenada/
+│   │   ├── 📁 italica_cursiva/
+│   │   ├── 📁 procesal/
+│   │   └── 📁 redonda/
+│   │
+│   └── 📁 cleaned/                          # (Future) cleaned transcripts after human / ML correction
+│       ├── 📁 encadenada/
+│       ├── 📁 italica_cursiva/
+│       ├── 📁 procesal/
+│       └── 📁 redonda/
+│
+├── 📁 logs/                                 # All machine-generated logs and analytical artefacts
+│   │
+│   ├── 📁 meta/                             # Dataset-level metadata (pairing + splits)
+│   │   ├── paired_data.json                 # All valid HTR–GT document pairs
+│   │   ├── train_pairs.json                 # Training split (stable, deterministic)
+│   │   ├── test_pairs.json                  # Test split (stable, deterministic)
+│   │   ├── missing_gt.json                  # HTRs with no GT match
+│   │   ├── missing_htr.json                 # GTs with no HTR match
+│   │   ├── pairing_summary.json             # Per-style counts
+│   │   ├── split_metadata.json              # Split stats (ratio, timestamp)
+│   │   └── htr_index.csv                    # Human-readable index of corpus
+│   │
+│   ├── 📁 step_summaries/                   # Per-stage aggregate outputs
+│   │   ├── step1_summary.json
+│   │   ├── step1_summary.csv
+│   │   ├── step1_<style>.png
+│   │   ├── step2_confusion_<style>.csv
+│   │   ├── step2_confusion_<style>.png
+│   │   ├── step3_summary.json
+│   │   ├── step3_summary.csv
+│   │   └── step3_<style>.png
+│   │
+│   ├── 📁 posthoc/                          # Cross-stage analytical outputs
+│   │   ├── s1_s2_overlap.json
+│   │   ├── s1_s3_overlap.json
+│   │   ├── s2_s3_overlap.json
+│   │   ├── posthoc_summary.json
+│   │   ├── posthoc_summary.csv
+│   │   └── posthoc_overlap_rates.png
+│   │
+│   ├── 📁 encadenada/                       # Per-document issue logs (canonical logs)
+│   │   └── 📁 <document_id>/
+│   │       └── issues.json                  # Unified issue schema (Step 1/2/3 combined)
+│   │
+│   ├── 📁 italica_cursiva/
+│   ├── 📁 procesal/
+│   └── 📁 redonda/
+│
+├── 📁 zips/                                 # Downloaded corpus archives (auto-managed)
+│   ├── encadenada.zip
+│   ├── italica_cursiva.zip
+│   ├── procesal.zip
+│   ├── redonda.zip
+│   └── ground_truths.zip
+│
+├── 📁 schemas_and_manifests/                # Project specifications (source-of-truth definitions)
+│   ├── zip_manifest.json                    # Dataset URLs + unzip targets
+│   └── tag_schema.json                      # Definitions of S1 / S2 / S3 tags
+│
+├── 📁 pipeline/                             # Orchestration scripts (stage runners)
+│   ├── run_split.py                         # Pairing + stable stratified split
+│   ├── run_step1.py                         # Surface anomaly detection
+│   ├── run_step2.py                         # Character-level GT–HTR alignment
+│   ├── run_step3.py                         # Linguistic heuristic tagging
+│   └── run_pipeline.py                      # Master pipeline runner
+│
+├── 📁 utils/                                # Core reusable logic
+│   ├── config.py                            # Global paths and constants
+│   ├── file_io.py                           # Safe JSON/text IO utilities
+│   ├── logging.py                           # Canonical issue logging
+│   ├── processing.py                        # Core detection logic (Steps 1–3)
+│   ├── alignment.py                         # Character alignment engine
+│   ├── tag_rules.py                         # Regex definitions for Step 1 + Step 3
+│   ├── tagging_rendering.py                 # Inline [SxTAG] insertion into transcripts
+│   ├── visualise.py                         # Charts + summary exports
+│   ├── posthoc_analysis.py                  # Cross-stage overlap analysis
+│   └── delete.py                            # Developer reset utility
+│
+├── README.md                                # Project overview + usage instructions
+└── requirements.txt                         # Python dependencies
+```
+
+## How to Run It
+Deterministic Data Management HEADING
+Stable Train/Test Splits
+
+Once a document is assigned to train or test, it will never move.
+
+New files are detected and added deterministically.
+
+Existing assignments are preserved.
+
+This guarantees reproducibility across reruns.
+
+Technical Notes
+
+Splits use style-aware hash assignment.
+
+Split metadata stored in logs/meta/.
+
+ZIP changes trigger pairing refresh but not reassignment.
+
+The process is idempotent.
+
+Canonical Issue Schema HEADING
+
+All issues from Steps 1–3 follow a unified structure:
+
+{
+  "tag": "S2I",
+  "description": "Extra character in HTR (insertion)",
+  "line": 4,
+  "char_start": 12,
+  "char_end": 15,
+  "htr_text": "texto",
+  "gt_text": "",
+  "overlaps_step1": [],
+  "overlaps_step2": [],
+  "_abs_start": 1234,
+  "_abs_end": 1240,
+  "review": {
+    "status": "unreviewed"
+  }
+}
+
+Human-readable fields
+
+line
+
+char_start
+
+char_end
+
+htr_text
+
+gt_text
+
+description
+
+Machine fields
+
+_abs_start
+
+_abs_end
+
+overlap arrays
+
+review.status
+
+Human Review Workflow HEADING
+
+Each issue begins as:
+
+"review": {
+  "status": "unreviewed"
+}
+
+Possible states:
+
+accepted
+
+rejected
+
+corrected
+
+ignored
+
+This enables:
+
+Detection → Review → Interpretation → Correction
+
+Without modifying raw logs.
+
+Running the Pipeline HEADING
+Run Entire Pipeline SUB
+
+From project root:
+python run_pipeline.py
+
+This executes:
+
+Dataset pairing + split
+
+Step 1 detection
+
+Step 2 alignment
+
+Step 3 heuristics
+
+Posthoc analysis
+
+Summary outputs
+
+Run Individual Stages H
+code block:
+python pipeline/run_split.py
+python pipeline/run_step1.py
+python pipeline/run_step2.py
+python pipeline/run_step3.py
+
+Resetting the Project H
+
+To remove all generated artifacts (without touching source code):
+python - <<'EOF'
+from utils.delete import reset_project_data
+reset_project_data()
+EOF
+
+This deletes:
+
+data/
+
+logs/
+
+outputs/
+
+zips/
+
+It preserves:
+
+pipeline/
+
+utils/
+
+schemas_and_manifests/
+
+Posthoc Analysis
+
+The system computes:
+
+S1 ↔ S2 overlaps
+
+S1 ↔ S3 overlaps
+
+S2 ↔ S3 overlaps
+
+Per-style totals
+
+Global totals
+
+Outputs:
+
+posthoc_summary.json
+
+posthoc_summary.csv
+
+posthoc_overlap_rates.png
+
+These allow researchers to assess:
+
+Which formatting errors are OCR-driven?
+
+Which heuristic flags correlate with alignment errors?
+
+Which calligraphy styles produce more instability?
+
+Rendering Tagged Transcripts H
+
+Rendering inserts tags directly into copies of transcripts:
+[S2I]texto[/S2I]
+Insertion uses _abs_start and _abs_end to guarantee deterministic placement.
+
+Original transcripts remain untouched.
+
+Detailed architecture diagram H
+
+             ZIP DATASETS
+                    ↓
+        ensure_raw_data()
+                    ↓
+            run_split()
+                    ↓
+         train_pairs.json
+                    ↓
+        ┌────────────┬────────────┐
+        ↓            ↓            ↓
+     Step 1       Step 2       Step 3
+ (regex rules)  (alignment)  (heuristics)
+        ↓            ↓            ↓
+   issues.json   issues.json   issues.json
+        └────────────┬────────────┘
+                     ↓
+             Posthoc Analysis
+                     ↓
+            Summary CSV + PNG
+                     ↓
+           Tagged Transcript Output
+
+For Researchers
+
+This pipeline:
+
+Does not alter original text
+
+Logs every detection transparently
+
+Enables human adjudication
+
+Quantifies error patterns
+
+Preserves full reproducibility
+
+For Developers
+
+Key design principles:
+
+Deterministic behaviour
+
+Schema-driven tags
+
+Idempotent operations
+
+Separation of detection and review
+
+No hardcoded tag logic
+
+Unified issue schema
+
+Adding a New Tag
+
+Add regex to utils/tag_rules.py
+
+Add description to schemas_and_manifests/tag_schema.json
+
+Ensure tag code matches
+
+Run pipeline
+
+Schema ↔ rules mismatch will raise an error.
+
+Reproducibility Guarantees
+
+Stable split
+
+Deterministic hashing
+
+No reassignment of existing documents
+
+Explicit logging of every issue
+
+No hidden transformations
+
+Future Extensions
+
+Web-based reviewer UI
+
+Review-state-aware rendering
+
+Auto-suggested corrections
+
+Style-specific rule modules
+
+ML confidence weighting
+
+Design Philosophy
+
+This system does not replace scholarship.
+
+It:
+
+Structures uncertainty
+
+Makes machine behaviour transparent
+
+Supports expert interpretation
+
+Encourages auditability
+
+It is a research tool, not an automated editor.
+
+Quick Rerun Checklist
+
+To rerun cleanly:
+code
+reset_project_data()
+python run_pipeline.py
+
+To inspect issues:
+code
+logs/<style>/<doc_id>/issues.json
+
+To inspect summaries:
+code
+logs/step_summaries/
+logs/posthoc/
