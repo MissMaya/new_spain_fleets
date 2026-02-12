@@ -1,0 +1,22 @@
+{
+  "encadenada": {
+    "url": "https://github.com/patymurrieta/New-Spain-Fleets/raw/main/Corpus_HTR_Encadenada_m2t4.zip",
+    "unzip_to": "data/raw/encadenada"
+  },
+  "italica_cursiva": {
+    "url": "https://github.com/patymurrieta/New-Spain-Fleets/raw/main/Corpus_HTR_Italica_cursiva_m3t1.zip",
+    "unzip_to": "data/raw/italica_cursiva"
+  },
+  "procesal": {
+    "url": "https://github.com/patymurrieta/New-Spain-Fleets/raw/main/Corpus_HTR_Procesal_m3t4.zip",
+    "unzip_to": "data/raw/procesal"
+  },
+  "redonda": {
+    "url": "https://github.com/patymurrieta/New-Spain-Fleets/raw/main/Corpus_HTR_Redonda_m1t3.zip",
+    "unzip_to": "data/raw/redonda"
+  },
+  "ground_truths": {
+    "url": "https://github.com/patymurrieta/New-Spain-Fleets/raw/main/Corpus_GT.zip",
+    "unzip_to": "data/raw/ground_truths"
+  }
+}

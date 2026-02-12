@@ -1,0 +1,25 @@
+{
+  "S1": {
+    "L": "Leading whitespace",
+    "T": "Trailing whitespace",
+    "W": "Multiple / unexpected internal whitespace",
+    "SP": "Space before punctuation",
+    "C": "Suspicious / invisible Unicode character",
+    "P": "Repeated or excessive punctuation",
+    "G": "Non-Latin or unexpected glyph",
+    "M": "Malformed or stray character",
+    "MP": "Mixed punctuation inside word"
+  },
+  "S2": {
+    "X": "Character misread (substitution)",
+    "I": "Extra character in HTR (insertion)",
+    "D": "Missing character in HTR (deletion)"
+  },
+  "S3": {
+    "Q": "QU not followed by E or I",
+    "WK": "Use of W or K",
+    "DC": "Unexpected double consonants (excl. cc, ll, nn, rr)",
+    "E": "Word ends in rare final consonant (C, F, K, M, P)",
+    "T": "Triple letter repetition"
+  }
+}
