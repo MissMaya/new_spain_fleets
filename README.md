@@ -244,11 +244,14 @@ Each entry records:
 
 
 **3. Posthoc logs**
+
 Located under:
 ```logs/posthoc/```
+
 These measure any relationships between pipeline steps and can be used to assess e.g. which error types cluster together, whether linguistic anomalies are caused by HTR mistranscription or how often formatting problems predict misalignment.
 
 File names should be self-explanatory. For example:
+
 ```s1_s2_overlap.json```
 Records where basic formatting errors coincide with HTR-GT misalignment
 
