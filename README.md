@@ -222,8 +222,8 @@ There are 3 levels:
 
 **1. Per-document issue logs**
 
-  These can be found under:
-  ```logs/calligraphy_<style>/<document>.json```
+These can be found under:
+```logs/calligraphy_<style>/<document>.json```
 
 Example path:
 ```logs/calligraphy_procesal/AGN_Indios_vol9_exp3_fs4v-5.json```
