@@ -231,8 +231,8 @@ Example path:
 These files contain every issue detected in that document.
 
 Each entry records:
-        - Detection stage (S1, S2, or S3)
-        - Issue code (e.g. W, I, X)
+- Detection stage (S1, S2, or S3)
+- Issue code (e.g. W, I, X)
         - A human-readable description of the issue (e.g. W = multiple internal whitespace, I = character insertion)
         - Line number
         - Character span
