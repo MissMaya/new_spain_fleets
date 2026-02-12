@@ -181,9 +181,29 @@ Tagged transcript rendering
 ├── README.md                               
 └── requirements.txt                         # Python dependencies
 ```
+## To Install
 
-## How to Install
+**1. Clone the repo**
 
+```
+git clone https://github.com/MissMaya/new_spain_fleets.git
+cd new_spain_fleets
+cd htr_cleaning
+```
+
+**2. Create virtual environment**
+
+```
+python -m venv .venv
+source .venv/bin/activate        # macOS / Linux
+# .venv\Scripts\activate         # Windows
+```
+
+**3. Install dependencies**
+
+```
+pip install -r requirements.txt
+```
 
 ## How to Run the Pipeline
 
@@ -305,7 +325,18 @@ For each stage of the pipeline, the step summaries log:
 - Total error counts
 - Distribution of errors per style
 
-These logs can be used to assess which styles contain the most errors, which types of errors are most prevalent, 
+These logs can be used to assess which styles contain the most errors and which types of errors are most prevalent, 
+
+**2. Outputs**
+
+Located under:
+
+```outputs/```
+
+- Bar plots of error types by calligraphy
+- Confusion matrices from Step 2 HTR-GT character-level alignment 
+
+
 
 
 
