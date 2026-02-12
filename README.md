@@ -228,19 +228,19 @@ There are 3 levels:
 Example path:
 ```logs/calligraphy_procesal/AGN_Indios_vol9_exp3_fs4v-5.json```
 
-These files contain every issue detected in that document.
+These files contain every issue detected in that document. Use them for close reading and manual inspection.
 
 Each entry records:
 - Detection stage (S1, S2, or S3)
 - Issue code (e.g. W, I, X)
-        - A human-readable description of the issue (e.g. W = multiple internal whitespace, I = character insertion)
-        - Line number
-        - Character span
-        - Relevant HTR and/or GT text snippet
-        - Overlap with other steps
-        - Review status (for human validation)
+- A human-readable description of the issue (e.g. W = multiple internal whitespace, I = character insertion)
+- Line number
+- Character span
+- Relevant HTR and/or GT text snippet
+- Overlap with other steps
+- Review status (for human validation)
 
-
+**2. Meta logs**
 
 
 
