@@ -23,6 +23,8 @@ Note that the pipeline does not auto-correct text. Instead, it:
 
 Any corrections to HTRs are only made post human-review.
 
+Any reference to "error" below means a potential anomaly flagged for human review.
+
 ## Why 3 Steps?
 
 This pipeline goes beyond the straight comparison of HTRs with GTs because:
@@ -270,7 +272,7 @@ For example:
 
 ```train_pairs.json``` records all of the training pairs used by the pipeline
 
-```missing_gt.json```  list all HTRs with missing GTs
+```missing_gt.json```  lists all HTRs with missing GTs
 
 ```pairing_summary.json``` pairing counts per calligraphy style
 
@@ -290,6 +292,20 @@ File names should be self-explanatory. For example:
 Records where basic formatting errors coincide with HTR-GT misalignment
 
 ### Outputs
+
+There are 2 types of output:
+
+**1. Step Summaries**
+
+Located under:
+
+```logs/step_summaries/```
+
+For each stage of the pipeline, the step summaries log: 
+- Total error counts
+- Distribution of errors per style
+
+These logs can be used to assess which styles contain the most errors, which types of errors are most prevalent, 
 
 
 
