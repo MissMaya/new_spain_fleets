@@ -35,6 +35,19 @@ This pipeline goes beyond the straight comparison of HTRs with GTs because:
 
 - The end use for this work is in humanities research, which necessitates room for interpretability and not just the flagging of differences between sources. 
 
+## The Dataset
+
+A corpus of .txt files containing HTR transcriptions and corresponding GT files from source documents using 4 types of historical Spanish calligraphy:
+
+- Encadenada
+- Italica Cursiva
+- Procesal
+- Redonda
+
+The pipeline operates on an 80% training set of HTR-GT pairings that has been stratified to represent each type of calligraphy. 
+
+Adding new documents to an exisiting training set is possible and doesn't reconfigure the existing set. 
+
 ## Workflow
 
 To recap the 3 stages of the pipeline:
@@ -215,7 +228,9 @@ The pipeline generates 2 types of results:
 
 ### Logs
 Located under:
+
 ```logs/```
+
 These are written automatically during each processing step and are the primary record of what the pipeline detected.
 
 There are 3 levels:
@@ -223,9 +238,11 @@ There are 3 levels:
 **1. Per-document issue logs**
 
 These can be found under:
+
 ```logs/calligraphy_<style>/<document>.json```
 
 Example path:
+
 ```logs/calligraphy_procesal/AGN_Indios_vol9_exp3_fs4v-5.json```
 
 These files contain every issue detected in that document. Use them for close reading and manual inspection.
@@ -241,11 +258,27 @@ Each entry records:
 - Review status (for human validation)
 
 **2. Meta logs**
+Located under:
+
+```logs/meta/```
+
+These logs describe how the dataset is organised and processed
+
+For example:
+
+```paired_data.json``` records all matched HTR-GT pairs
+
+```train_pairs.json``` records all of the training pairs used by the pipeline
+
+```missing_gt.json```  list all HTRs with missing GTs
+
+```pairing_summary.json``` pairing counts per calligraphy style
 
 
 **3. Posthoc logs**
 
 Located under:
+
 ```logs/posthoc/```
 
 These measure any relationships between pipeline steps and can be used to assess e.g. which error types cluster together, whether linguistic anomalies are caused by HTR mistranscription or how often formatting problems predict misalignment.
@@ -253,8 +286,8 @@ These measure any relationships between pipeline steps and can be used to assess
 File names should be self-explanatory. For example:
 
 ```s1_s2_overlap.json```
-Records where basic formatting errors coincide with HTR-GT misalignment
 
+Records where basic formatting errors coincide with HTR-GT misalignment
 
 ### Outputs
 
@@ -262,23 +295,4 @@ Records where basic formatting errors coincide with HTR-GT misalignment
 
 
 
-
-Deterministic Data Management HEADING
-Stable Train/Test Splits
-
-Once a document is assigned to train or test, it will never move.
-
-New files are detected and added deterministically.
-
-Existing assignments are preserved.
-
-This guarantees reproducibility across reruns.
-
-Technical Notes
-
-Splits use style-aware hash assignment.
-
-Split metadata stored in logs/meta/.
-
-ZIP changes trigger pairing refresh but not reassignment.
 
