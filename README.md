@@ -208,7 +208,27 @@ This will delete:
 3. logs/
 4. outputs/
 
-## Posthoc Analysis
+## Outputs
+The pipeline generates 2 types of results:
+1. Logs: document-level records of detected issues
+2. Outputs: summaries, statistics, and visualisations
+
+### Logs
+Located under:
+```logs/```
+These are written automatically during each processing step and are the primary record of what the pipeline detected.
+
+There are 3 levels:
+
+1. Arranged as 3 levels 
+Logs are the primary record of what the pipeline detected.
+They are written automatically during each processing step.
+
+Logs are organised in three layers:
+
+
+
+
 We compute any overlaps between: 
 
 - Step 1 ↔ Step 2, 
