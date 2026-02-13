@@ -28,7 +28,7 @@ INTERNAL_WHITESPACE = re.compile(r"[ \t]{2,}")
 SPACE_BEFORE_PUNCTUATION = re.compile(r"[ \t]+[.,;:!?]")
 SUSPICIOUS_UNICODE = re.compile(r"[\u200B\u200C\u200D\u2060\uFEFF]")
 REPEATED_PUNCTUATION = re.compile(r"[.,;:!?]{2,}")
-NON_LATIN_GLYPH = re.compile(r"[^\p{Latin}\p{N}\p{P}\p{Zs}]")
+NON_LATIN_GLYPH = re.compile(r"[^\p{Latin}\p{N}\p{P}\p{Zs}\n\r\t]")
 MALFORMED_CHARACTER = re.compile(r"\uFFFD")
 MIXED_PUNCTUATION = re.compile(r"\w[.,;:!?]\w")
 
