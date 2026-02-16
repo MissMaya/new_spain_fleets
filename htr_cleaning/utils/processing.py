@@ -27,6 +27,7 @@ from utils.logging import log_issue
 from utils.alignment import align_and_tag, NULL_CHAR, spans_overlap
 from utils.file_io import safe_write_json, read_text
 from utils.tag_rules import all_step3_tags
+from utils.normalisation import normalise_pair
 
 
 # ----------------------------------------------------------------------
@@ -229,14 +230,18 @@ def process_step2_issues(
                 {"tag": full_tag, "start": start, "end": end}
             )
 
-            # Confusion matrix (character-level), using original segments
-            gt_seg = gt_seg if gt_seg else NULL_CHAR
-            htr_seg = htr_seg if htr_seg else NULL_CHAR
+            # Confusion matrix (character-level)
+            gt_seg = issue["gt_text"] if issue["gt_text"] else NULL_CHAR
+            htr_seg = issue["htr_text"] if issue["htr_text"] else NULL_CHAR
 
             max_len = max(len(gt_seg), len(htr_seg))
+
             for i in range(max_len):
-                g = gt_seg[i] if i < len(gt_seg) else NULL_CHAR
-                h = htr_seg[i] if i < len(htr_seg) else NULL_CHAR
+                g_raw = gt_seg[i] if i < len(gt_seg) else NULL_CHAR
+                h_raw = htr_seg[i] if i < len(htr_seg) else NULL_CHAR
+
+                g, h = normalise_pair(g_raw, h_raw, lowercase = False)
+
                 confusion_by_style[style][g][h] += 1
 
             # Overlap tracking (S1<->S2)
