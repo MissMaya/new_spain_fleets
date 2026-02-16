@@ -21,114 +21,122 @@ Works as follows:
 - Adding new documents never changes IDs of existing ones.
 
 """
-
-from __future__ import annotations
-
-from pathlib import Path
-from typing import Dict, List
 import hashlib
+import json
+import os
+from collections import defaultdict
+from typing import Dict, List
 
-from utils.config import LOGS_DIR
-from utils.file_io import load_json_if_exists, safe_write_json
-
-# TODO FLAG: COULD BE IMPROVED TO STOP HARDCODING => SHOULD READ DIRECTLY FROM SCHEMA
-S1_TAGS = {"L", "T", "W", "SP", "C", "P", "G", "M", "MP"}
-S2_TAGS = {"X", "I", "D"}
-
+# ---------------------------------------------------------------------
+# Prefix-based stage inference
+# ---------------------------------------------------------------------
 
 def infer_step(tag: str) -> str:
-    if tag in S1_TAGS:
+    """
+    Infer pipeline step from the tag prefix.
+    """
+    if not tag:
+        return "UNKNOWN"
+
+    if tag.startswith("S1"):
         return "S1"
-    if tag in S2_TAGS:
+    if tag.startswith("S2"):
         return "S2"
-    return "S3"
+    if tag.startswith("S3"):
+        return "S3"
+
+    return "UNKNOWN"
 
 
-def _fingerprint(doc_id: str, step: str, issue: Dict) -> str:
+# ---------------------------------------------------------------------
+# Fingerprint builder
+# ---------------------------------------------------------------------
+
+def build_fingerprint(issue: Dict, doc_id: str) -> str:
     """
-    Build a stable fingerprint string for an issue.
+    Create deterministic fingerprint for an issue.
     """
+    tag = issue.get("tag", "")
+    step = infer_step(tag)
+
     parts = [
         doc_id,
         step,
-        str(issue.get("tag", "")),
-        str(issue.get("start", "")),
-        str(issue.get("end", "")),
-        str(issue.get("line", "")),
-        str(issue.get("gt", "")),
-        str(issue.get("htr", "")),
+        tag,
+        str(issue.get("_abs_start")),
+        str(issue.get("_abs_end")),
+        str(issue.get("line")),
+        issue.get("gt_text") or "",
+        issue.get("htr_text") or "",
     ]
+
     return "||".join(parts)
 
 
+# ---------------------------------------------------------------------
+# Single document ID assignment 
+# ---------------------------------------------------------------------
+
 def assign_issue_ids_for_doc(doc_id: str, issues: List[Dict]) -> List[Dict]:
     """
-    Return a new list of issues where each issue has:
-        - issue_id
-        - step
-
-    Original issue dicts are not modified.
+    Assign deterministic issue_ids to a list of issues for a document.
+    Handles duplicate identical fingerprints by adding occurrence count.
     """
+    seen = defaultdict(int)
+    updated = []
 
-    # A fixed processing order ensures identical issues are treated consistently across runs.
-    def sort_key(i: Dict):
-        return (
-            i.get("start", -1),
-            i.get("end", -1),
-            i.get("tag", ""),
-            i.get("line", -1),
-            i.get("gt", ""),
-            i.get("htr", ""),
-        )
-
-    sorted_issues = sorted(issues, key=sort_key)
-
-    seen = {}
-    out = []
-
-    for issue in sorted_issues:
-        tag = issue.get("tag", "")
-        step = infer_step(tag)
-
-        fp = _fingerprint(doc_id, step, issue)
-        seen[fp] = seen.get(fp, 0) + 1
+    for issue in issues:
+        fp = build_fingerprint(issue, doc_id)
+        seen[fp] += 1
         occurrence = seen[fp]
 
-        digest = hashlib.sha1(f"{fp}||{occurrence}".encode("utf-8")).hexdigest()[:10]
-        issue_id = f"{doc_id}-{step}-{tag}-{digest}"
+        digest = hashlib.sha1(
+            f"{fp}||{occurrence}".encode("utf-8")
+        ).hexdigest()[:10]
 
-        new_issue = dict(issue)
-        new_issue["step"] = step
-        new_issue["issue_id"] = issue_id
+        new_issue = issue.copy()
+        new_issue["issue_id"] = digest
+        updated.append(new_issue)
 
-        out.append(new_issue)
-
-    return out
+    return updated
 
 
-def assign_issue_ids_all_logs():
+# ---------------------------------------------------------------------
+# Batch assignment across all logs
+# ---------------------------------------------------------------------
+
+def assign_issue_ids_all_logs(logs_root: str = "logs"):
     """
-    Walk logs/<style>/<doc_id>/issues.json and write issues_with_ids.json
-    alongside each file.
+    Walk through logs/<style>/<doc>/issues.json
+    Generate issues_with_ids.json per document.
     """
+    if not os.path.isdir(logs_root):
+        print(f"[issue_ids] Logs directory not found: {logs_root}")
+        return
 
-    for style_dir in LOGS_DIR.iterdir():
-        if not style_dir.is_dir():
+    for style in os.listdir(logs_root):
+        style_path = os.path.join(logs_root, style)
+
+        if not os.path.isdir(style_path):
             continue
 
-        for doc_dir in style_dir.iterdir():
-            if not doc_dir.is_dir():
+        for doc in os.listdir(style_path):
+            doc_path = os.path.join(style_path, doc)
+
+            if not os.path.isdir(doc_path):
                 continue
 
-            doc_id = doc_dir.name
-            issues_path = doc_dir / "issues.json"
-
-            if not issues_path.exists():
+            issues_path = os.path.join(doc_path, "issues.json")
+            if not os.path.exists(issues_path):
                 continue
 
-            issues = load_json_if_exists(issues_path, [])
-            if not issues:
-                continue
+            with open(issues_path, "r", encoding = "utf-8") as f:
+                issues = json.load(f)
 
-            with_ids = assign_issue_ids_for_doc(doc_id, issues)
-            safe_write_json(with_ids, doc_dir / "issues_with_ids.json")
+            updated = assign_issue_ids_for_doc(doc, issues)
+
+            output_path = os.path.join(doc_path, "issues_with_ids.json")
+            with open(output_path, "w", encoding = "utf-8") as f:
+                json.dump(updated, f, indent=2, ensure_ascii = False)
+
+            print(f"[issue_ids] Updated: {output_path}")
