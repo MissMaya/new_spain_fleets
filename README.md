@@ -174,6 +174,7 @@ Tagged transcript rendering
 │   ├── alignment.py                         # Character alignment
 │   ├── tag_rules.py                         # Regex definitions Step 1 + Step 3
 │   ├── tagging_rendering.py                 # Inline tag insertion into copies of transcripts
+│   ├── normalisation.py                     # Clean up confusion matrices
 │   ├── visualise.py                         # Charts + summary exports
 │   ├── posthoc_analysis.py                  # Overlap analysis
 │   └── delete.py                            # Developer reset utility
