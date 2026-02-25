@@ -17,12 +17,14 @@ To run the entire pipeline:
 
 Every stage of the pipeline should produce reproducible results. Outputs are saved as structured files.
 """
-
+import time
 from pipeline.run_split import run_split
 from pipeline.run_step1 import run_step1
 from pipeline.run_step2 import run_step2
 from pipeline.run_step3 import run_step3
 from utils.posthoc_analysis import run_posthoc_analysis
+from pipeline.assign_issue_ids import assign_issue_ids_all_logs
+from pipeline.build_review_pool import build_review_pool
 
 
 def main():
@@ -33,10 +35,25 @@ def main():
     run_step2()
     run_step3()
     run_posthoc_analysis()
+    assign_issue_ids_all_logs()
+    build_review_pool()
 
     print("Pipeline complete.")
 
 
 if __name__ == "__main__":
+    start_time = time.perf_counter()
+
+    print("\nPipeline starting...\n")
+
     main()
+
+    end_time = time.perf_counter()
+    elapsed = end_time - start_time
+
+    minutes = int(elapsed // 60)
+    seconds = elapsed % 60
+
+    print("\n--- Pipeline Runtime ---")
+    print(f"Total runtime: {minutes} min {seconds:.2f} secs")
     

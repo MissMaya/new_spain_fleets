@@ -18,7 +18,7 @@ Note that:
 from pathlib import Path
 import csv
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 import requests
 import zipfile
 from collections import defaultdict
@@ -28,7 +28,7 @@ from utils.file_io import read_json, safe_write_json, load_json_if_exists, index
 
 META_DIR = LOGS_DIR / "meta"
 
-# TODO FLAG: CHANGE TO REMOVE HARDCODING - CALLIGRAPHY TYPES SHOULD READ FROM MANIFEST 
+# TODO FLAG: CHANGE TO REMOVE HARDCODING - CALLIGRAPHY TYPES SHOULD READ FROM MANIFEST
 CALLIGRAPHY_TYPES = ["encadenada", "italica_cursiva", "procesal", "redonda"]
 LOW_COUNT_THRESHOLD = 10
 
@@ -63,6 +63,42 @@ def _basename(path: Path):
     return path.stem
 
 
+def build_htr_prefix_index(htr_files_by_style):
+    """
+    Builds an index mapping every possible left-prefix of an HTR stem to the HTR file(s).
+
+    Example HTR:
+        utblac_wbs_1912_duplicated_1_Italica_cursiva_m3t1_HTR.txt
+
+    Will map:
+        utblac
+        utblac_wbs
+        utblac_wbs_1912
+        ...
+        utblac_wbs_1912_duplicated_1
+        ...
+    to that file (and its style).
+    """
+    index = defaultdict(list)
+
+    for style, files in htr_files_by_style.items():
+        for htr in files:
+            if not htr.name.endswith("_HTR.txt"):
+                continue
+
+            stem = htr.name[:-8]  # remove _HTR.txt
+            parts = stem.split("_")
+
+            for i in range(1, len(parts) + 1):
+                prefix = "_".join(parts[:i])
+                index[prefix].append({
+                    "style": style,
+                    "path": htr
+                })
+
+    return index
+
+
 # ---------------------------------------------------------------------
 # ZIP handling + cache invalidation
 # ---------------------------------------------------------------------
@@ -82,6 +118,11 @@ def ensure_raw_data():
         META_DIR / "paired_data.json",
         META_DIR / "train_pairs.json",
         META_DIR / "test_pairs.json",
+        META_DIR / "missing_gt.json",
+        META_DIR / "missing_htr.json",
+        META_DIR / "pairing_summary.json",
+        META_DIR / "split_metadata.json",
+        META_DIR / "htr_index.csv",
     ]
 
     updated = False
@@ -107,7 +148,7 @@ def ensure_raw_data():
 
             zip_meta[name] = {
                 "size": remote_size,
-                "downloaded_at": datetime.utcnow().isoformat()
+                "downloaded_at": datetime.now(timezone.utc).strftime("%d-%m-%Y %H:%M UTC")
             }
 
             updated = True
@@ -139,31 +180,55 @@ def run_split(test_ratio = 0.2):
     META_DIR.mkdir(parents = True, exist_ok = True)
     ensure_raw_data()
 
+    # Collect files
     htr_files = {s: index_txt_files(RAW_DIR / s) for s in CALLIGRAPHY_TYPES}
     gt_files = index_txt_files(RAW_DIR / "ground_truths")
+
+    # Keep gt_map in case it is in legacy code
     gt_map = {_basename(p): p for p in gt_files}
 
     paired = []
-    missing_gt = []
-    missing_htr = []
+    missing_gt = []   # HTR files with no matching GT
+    missing_htr = []  # GT files with no matching HTR
 
+    # Build index for fast GT -> HTR lookup
+    htr_index = build_htr_prefix_index(htr_files)
+
+    # Track which HTR files are used by any GT (to compute missing_gt)
+    used_htr = set()
+
+    # Pair: GT is authoritative stem; expand to multiple HTR matches if present
+    for gt in gt_files:
+        if not gt.name.endswith("_GT.txt"):
+            # If there are non-conforming GT filenames, skip or handle as needed
+            continue
+
+        gt_stem = gt.name[:-7]  # remove _GT.txt
+        matches = htr_index.get(gt_stem, [])
+
+        if len(matches) == 0:
+            missing_htr.append(str(gt))
+            continue
+
+        for match in matches:
+            style = match["style"]
+            htr_path = match["path"]
+
+            paired.append({
+                # Unique per (GT, HTR) so multiples don't collide
+                "id": f"{gt_stem}:{htr_path.name}",
+                "style": style,
+                "htr_path": str(htr_path),
+                "gt_path": str(gt),
+            })
+
+            used_htr.add(str(htr_path))
+
+    # Any HTR never used by any GT is "missing_gt"
     for style, files in htr_files.items():
         for htr in files:
-            base = _basename(htr)
-            if base in gt_map:
-                paired.append({
-                    "id": base,
-                    "style": style,
-                    "htr_path": str(htr),
-                    "gt_path": str(gt_map[base]),
-                })
-            else:
+            if str(htr) not in used_htr:
                 missing_gt.append(str(htr))
-
-    htr_ids = {_basename(p) for fs in htr_files.values() for p in fs}
-    for base, gt in gt_map.items():
-        if base not in htr_ids:
-            missing_htr.append(str(gt))
 
     paired.sort(key = lambda p: (p["style"], p["id"]))
 
@@ -183,6 +248,7 @@ def run_split(test_ratio = 0.2):
         split = _stable_assign(f"{p['style']}:{p['id']}", test_ratio)
         (test_pairs if split == "test" else train_pairs).append(p)
 
+    # Write logs
     safe_write_json(paired, META_DIR / "paired_data.json")
     safe_write_json(train_pairs, train_path)
     safe_write_json(test_pairs, test_path)
@@ -216,7 +282,7 @@ def run_split(test_ratio = 0.2):
     safe_write_json(summary, META_DIR / "pairing_summary.json")
 
     safe_write_json({
-        "generated_at": datetime.utcnow().strftime("%d-%m-%Y %H:%M UTC"),
+        "generated_at": datetime.now(timezone.utc).strftime("%d-%m-%Y %H:%M UTC"),
         "total_pairs": len(paired),
         "train_count": len(train_pairs),
         "test_count": len(test_pairs),
@@ -237,4 +303,3 @@ def run_split(test_ratio = 0.2):
 
 if __name__ == "__main__":
     run_split()
-    

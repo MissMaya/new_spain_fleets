@@ -199,7 +199,7 @@ def process_step2_issues(
             issue["tag"] = full_tag
             issue["description"] = tag_schema["S2"][raw_tag]
 
-            # --- unify to schema ---
+            # Unify to schema
             start = issue.pop("start")
             end = issue.pop("end")
             issue["_abs_start"] = start
@@ -257,7 +257,7 @@ def process_step2_issues(
     }
 
     posthoc_dir = logs_dir / "posthoc"
-    posthoc_dir.mkdir(parents=True, exist_ok=True)
+    posthoc_dir.mkdir(parents = True, exist_ok = True)
     safe_write_json(overlap_metadata, posthoc_dir / "s1_s2_overlap.json")
 
     return confusion_by_style, overlap_metadata, step2_spans_by_file
