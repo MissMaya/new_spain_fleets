@@ -3,8 +3,7 @@ alignment_word_level.py
 
 Word-level alignment utilities for implementing step 2A of a hierarchical alignment process.
 
-`Steps:
-
+Steps:
     1. Tokenise GT and HTR into word (and optional punctuation) tokens
        while preserving absolute character spans.
     2. Perform deterministic dynamic-programming alignment over token sequences.
@@ -15,7 +14,6 @@ Word-level alignment utilities for implementing step 2A of a hierarchical alignm
          - delete  (GT word → Ø)
 
 Key properties:
-
 - Tokenisation preserves absolute character offsets in the original text.
 - Whitespace is ignored during alignment but spans remain anchored to the
   original document.
@@ -39,7 +37,7 @@ Returns plain Python dictionaries independent of logging and overlap logic.
 """
 
 import re
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 
 # ------------------------------------------------------------
@@ -54,12 +52,14 @@ WORD_REGEX = re.compile(
 
 def tokenise_with_spans(text: str) -> List[Dict]:
     """
-    Tokenise text into word tokens with absolute spans.
-    Whitespace is ignored.
-    Included punctuation as separate tokens (future-proofing step - current HTR and GT should have no punctuation)
-    """
+    Tokenise text into tokens with absolute spans.
 
-    tokens = []
+    - Words are matched with WORD_REGEX.
+    - Whitespace is ignored.
+    - Non-word characters are emitted as single "punct" tokens (future-proofing).
+      (In your current corpus HTR/GT are expected to have minimal punctuation.)
+    """
+    tokens: List[Dict] = []
     index = 0
     length = len(text)
 
@@ -101,7 +101,10 @@ def tokenise_with_spans(text: str) -> List[Dict]:
 
 def normalised_levenshtein_similarity(a: str, b: str) -> float:
     """
-    Basic deterministic, normalised Levenshtein similarity
+    Basic deterministic, normalised Levenshtein similarity.
+
+    Returns a float in [0,1].
+    Uses plain DP edit distance normalised by max length.
     """
     if a == b:
         return 1.0
@@ -150,8 +153,17 @@ def align_word_sequences(
         {
             "op": "equal" | "replace" | "insert" | "delete",
             "gt": token_or_None,
-            "htr": token_or_None
+            "htr": token_or_None,
+
+            # NEW (for downstream logging/diagnostics):
+            "word_gt": str|None,
+            "word_htr": str|None
         }
+
+    NOTE:
+    - word_gt/word_htr are lightweight string fields used by review export and
+      diagnostics (e.g. top deletions/insertions).
+    - gt/htr still contain the full token dicts with spans for precise mapping.
     """
 
     n = len(gt_tokens)
@@ -179,13 +191,13 @@ def align_word_sequences(
                 replace_cost = 1 if sim >= similarity_threshold else 2
 
             dp[i][j] = min(
-                dp[i - 1][j] + 1,              # delete
-                dp[i][j - 1] + 1,              # insert
-                dp[i - 1][j - 1] + replace_cost  # replace/match
+                dp[i - 1][j] + 1,                 # delete
+                dp[i][j - 1] + 1,                 # insert
+                dp[i - 1][j - 1] + replace_cost   # replace/match
             )
 
     # Traceback (deterministic: diag > delete > insert)
-    ops = []
+    ops: List[Dict] = []
     i = n
     j = m
 
@@ -206,32 +218,42 @@ def align_word_sequences(
                     ops.append({
                         "op": "equal",
                         "gt": gt_tokens[i - 1],
-                        "htr": htr_tokens[j - 1]
+                        "htr": htr_tokens[j - 1],
+                        "word_gt": gt_word,
+                        "word_htr": htr_word,
                     })
                 else:
                     ops.append({
                         "op": "replace",
                         "gt": gt_tokens[i - 1],
-                        "htr": htr_tokens[j - 1]
+                        "htr": htr_tokens[j - 1],
+                        "word_gt": gt_word,
+                        "word_htr": htr_word,
                     })
                 i -= 1
                 j -= 1
                 continue
 
         if i > 0 and dp[i][j] == dp[i - 1][j] + 1:
+            gt_word = gt_tokens[i - 1]["text"]
             ops.append({
                 "op": "delete",
                 "gt": gt_tokens[i - 1],
-                "htr": None
+                "htr": None,
+                "word_gt": gt_word,
+                "word_htr": None,
             })
             i -= 1
             continue
 
         if j > 0 and dp[i][j] == dp[i][j - 1] + 1:
+            htr_word = htr_tokens[j - 1]["text"]
             ops.append({
                 "op": "insert",
                 "gt": None,
-                "htr": htr_tokens[j - 1]
+                "htr": htr_tokens[j - 1],
+                "word_gt": None,
+                "word_htr": htr_word,
             })
             j -= 1
             continue

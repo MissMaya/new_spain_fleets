@@ -1,37 +1,40 @@
 """
 alignment.py
 
-Utilities to achieve character-level alignment for Step 2 of the HTR cleaning pipeline.
+Contains utilities to achieve hierarchical alignment for step 2 of the pipeline. 
 
-Aligns GT and HTR documents using difflib and tags:
+Previously, we used full-document, character-level alignment
+(with difflib) but this gave meaningless results. The new method of aligning uses
+tokenisation to align at word-level before using character-level alignment on mismatched
+words only.
 
-- X : substitution (GT → HTR)
-- I : insertion (Ø → HTR)
-- D : deletion (GT → Ø)
+Step 2A — Word-Level Alignment
+    - Tokenise GT and HTR into token sequences,
+      preserving absolute character spans.
+    - Align token sequences.
+    - Detect word-level operations: equal / replace / insert / delete.
 
-Key properties:
-
-- Alignment is performed on full documents (not line-by-line) to allow for
-  line breaks to differ between GT and HTR. I've seen differing line breaks when 
-  comparing multiple GT and HTR files so I know that this will be a common feauture 
-  in this dataset.
-- All issues are reported as character spans.
-- Deletions are anchored at an insertion point.
-- Line numbers are reconstructed after alignment.
-- Step 1 / Step 2 coupling is computed via span overlap.
-
-Issues are returned as Python dictionaries suitable for JSON logging.
+Step 2B — Character-Level Alignment (Within Word Substitutions)
+    - For each word-level replacement, perform character-level
+      alignment. Crucially, this operation now happens 
+      inside the mismatched word pair only.
+    - Tag issues as follows:
+        - X : substitution (GT → HTR)
+        - I : insertion (Ø → HTR)
+        - D : deletion (GT → Ø)
 """
 
-import difflib
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
+
+from .alignment_word_level import tokenise_with_spans, align_word_sequences
+from .alignment_char_level import align_chars, char_ops_to_span_issues
 
 
 NULL_CHAR = "Ø"
 
 
 # ----------------------------------------------------------------------
-# Helpers
+# Helper functions
 # ----------------------------------------------------------------------
 
 def compute_line_offsets(text: str) -> List[int]:
@@ -68,8 +71,195 @@ def spans_overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
     return max(a_start, b_start) < min(a_end, b_end)
 
 
+def _find_deletion_anchor(
+    word_ops: List[Dict],
+    idx: int,
+    last_htr_end: Optional[int],
+    htr_text_len: int) -> int:
+    """
+    For deletions, work out an HTR anchor position. Preference:
+      1) next available HTR token start
+      2) last seen HTR token end
+      3) 0
+    """
+    # Look ahead for next op with HTR token
+    for j in range(idx + 1, len(word_ops)):
+        htr_tok = word_ops[j].get("htr")
+        if htr_tok is not None:
+            return int(htr_tok["start"])
+
+    if last_htr_end is not None:
+        return int(last_htr_end)
+
+    return 0
+
+
+def _compute_step1_overlaps(
+    start: int,
+    end: int,
+    step1_spans: List[Dict]
+) -> List[str]:
+    """
+    Compute Step 1 overlap tags for a Step 2 issue span.
+    For spans of length 0 (deletions), treat as [start, start+1).
+    """
+    overlaps = []
+    a_end = end if end > start else start + 1
+
+    for s1 in step1_spans:
+        s1_start = s1["start"]
+        s1_end = s1["end"]
+        if spans_overlap(start, a_end, s1_start, s1_end):
+            overlaps.append(s1["tag"])
+
+    return sorted(set(overlaps))
+
+
 # ----------------------------------------------------------------------
-# Core alignment
+# Hierarchical alignment
+# ----------------------------------------------------------------------
+
+def align_and_tag_hierarchical(
+    gt_text: str,
+    htr_text: str,
+    step1_spans: List[Dict],
+    similarity_threshold: float = 0.5
+) -> Tuple[List[Dict], List[Dict]]:
+    """
+    Hierarchical Step 2 alignment.
+
+    Returns:
+      issues: list of span issues (using Step 2 tags X/I/D), anchored in HTR absolute offsets
+      word_ops: the Stage 2A word-level operation stream (for stats/debug)
+    """
+    gt_tokens = tokenise_with_spans(gt_text)
+    htr_tokens = tokenise_with_spans(htr_text)
+
+    word_ops = align_word_sequences(gt_tokens, htr_tokens, similarity_threshold = similarity_threshold)
+
+    htr_line_offsets = compute_line_offsets(htr_text)
+    issues: List[Dict] = []
+
+    last_htr_end: Optional[int] = None
+    htr_len = len(htr_text)
+
+    for idx, op in enumerate(word_ops):
+        op_type = op["op"]
+        gt_tok = op.get("gt")
+        htr_tok = op.get("htr")
+
+        if htr_tok is not None:
+            last_htr_end = int(htr_tok["end"])
+
+        if op_type == "equal":
+            continue
+
+        # --------------------------
+        # Word insertion (Ø → HTR)
+        # --------------------------
+        if op_type == "insert" and htr_tok is not None:
+            start = int(htr_tok["start"])
+            end = int(htr_tok["end"])
+            line_num = find_line_number(htr_line_offsets, start)
+            overlaps_step1 = _compute_step1_overlaps(start, end, step1_spans)
+
+            issues.append({
+                "tag": "I",
+                "start": start,
+                "end": end,
+                "gt": "",
+                "htr": htr_text[start:end],
+                "line": line_num,
+                "overlaps_step1": overlaps_step1,
+
+                # metadata
+                "word_op": "insert",
+                "word_gt": None,
+                "word_htr": htr_tok["text"],
+                "word_htr_span": [start, end],
+                "word_gt_span": None,
+            })
+            continue
+
+        # --------------------------
+        # Word deletion (GT → Ø)
+        # --------------------------
+        if op_type == "delete" and gt_tok is not None:
+            anchor = _find_deletion_anchor(word_ops, idx, last_htr_end, htr_len)
+            start = int(anchor)
+            end = int(anchor)  # point anchor
+            line_num = find_line_number(htr_line_offsets, start)
+            overlaps_step1 = _compute_step1_overlaps(start, end, step1_spans)
+
+            issues.append({
+                "tag": "D",
+                "start": start,
+                "end": end,
+                "gt": gt_tok["text"],
+                "htr": "",
+                "line": line_num,
+                "overlaps_step1": overlaps_step1,
+
+                # metadata
+                "word_op": "delete",
+                "word_gt": gt_tok["text"],
+                "word_htr": None,
+                "word_gt_span": [int(gt_tok["start"]), int(gt_tok["end"])],
+                "word_htr_span": None,
+            })
+            continue
+
+        # --------------------------
+        # Word substitution: run char-level alignment inside word pair only
+        # --------------------------
+        if op_type == "replace" and gt_tok is not None and htr_tok is not None:
+            gt_word = gt_tok["text"]
+            htr_word = htr_tok["text"]
+
+            htr_word_abs_start = int(htr_tok["start"])
+            htr_word_abs_end = int(htr_tok["end"])
+
+            char_ops = align_chars(gt_word, htr_word)
+            span_issues = char_ops_to_span_issues(
+                char_ops = char_ops,
+                htr_abs_start = htr_word_abs_start,
+                gt_word = gt_word,
+                htr_word = htr_word,
+            )
+
+            # Add additional details to span issues
+            for si in span_issues:
+                start = int(si["start"])
+                end = int(si["end"])
+                line_num = find_line_number(htr_line_offsets, start)
+                overlaps_step1 = _compute_step1_overlaps(start, end, step1_spans)
+
+                issues.append({
+                    "tag": si["tag"],  # X/I/D
+                    "start": start,
+                    "end": end,
+                    "gt": si.get("gt", ""),
+                    "htr": si.get("htr", ""),
+                    "line": line_num,
+                    "overlaps_step1": overlaps_step1,
+
+                    # metadata
+                    "word_op": "replace",
+                    "word_gt": gt_word,
+                    "word_htr": htr_word,
+                    "word_gt_span": [int(gt_tok["start"]), int(gt_tok["end"])],
+                    "word_htr_span": [htr_word_abs_start, htr_word_abs_end],
+                })
+
+            continue
+
+        continue
+
+    return issues, word_ops
+
+
+# ----------------------------------------------------------------------
+# Make backwards-compatible
 # ----------------------------------------------------------------------
 
 def align_and_tag(
@@ -78,96 +268,8 @@ def align_and_tag(
     step1_spans: List[Dict],
 ):
     """
-    Align GT and HTR full texts and produce Step 2 span-based issues.
-
-    Parameters
-    ----------
-    gt_text : str
-        Ground truth document (full text).
-
-    htr_text : str
-        HTR document (full text).
-
-    step1_spans : list of dict Step 1 issues for this file. Each dict must contain:
-            - start (global HTR offset)
-            - end (global HTR offset)
-            - tag
-
-    Returns
-    -------
-    issues : list of dict
-
-        Each issue has:
-
-        - tag : "X" (substitution), "I" (insertion), or "D" (deletion)
-        - start : global HTR start offset
-        - end : global HTR end offset (may be the same as start in the case of deletions)
-        - gt : GT substring (or "")
-        - htr : HTR substring (or "")
-        - line : 1-based line number (in HTR)
-        - overlaps_step1 : list of Step 1 tags whose spans overlap this issue
+    Returns only the Step 2 span issues list (tag X/I/D) as expected
+    by the initial processing code.
     """
-
-    matcher = difflib.SequenceMatcher(a = gt_text, b = htr_text)
-    opcodes = matcher.get_opcodes()
-
-    htr_line_offsets = compute_line_offsets(htr_text)
-
-    issues = []
-
-    for tag, i1, i2, j1, j2 in opcodes:
-
-        if tag == "equal":
-            continue
-
-        # GT and HTR substrings
-        gt_seg = gt_text[i1:i2]
-        htr_seg = htr_text[j1:j2]
-
-        if tag == "replace":
-            issue_tag = "X"
-            start = j1
-            end = j2
-
-        elif tag == "insert":
-            issue_tag = "I"
-            start = j1
-            end = j2
-
-        elif tag == "delete":
-            issue_tag = "D"
-            # Deletions have no HTR span so we just anchor at insertion point
-            start = j1
-            end = j1
-
-        else:
-            continue
-
-        line_num = find_line_number(htr_line_offsets, start)
-
-        # --------------------------------------------------------------
-        # Step 1 overlap detection (span-based)
-        # --------------------------------------------------------------
-
-        overlapping_step1 = []
-
-        for s1 in step1_spans:
-            s1_start = s1["start"]
-            s1_end = s1["end"]
-
-            if spans_overlap(start, end if end > start else start + 1, s1_start, s1_end):
-                overlapping_step1.append(s1["tag"])
-
-        issue = {
-            "tag": issue_tag,
-            "start": start,
-            "end": end,
-            "gt": gt_seg if issue_tag != "I" else "",
-            "htr": htr_seg if issue_tag != "D" else "",
-            "line": line_num,
-            "overlaps_step1": sorted(set(overlapping_step1)),
-        }
-
-        issues.append(issue)
-
+    issues, _word_ops = align_and_tag_hierarchical(gt_text, htr_text, step1_spans)
     return issues

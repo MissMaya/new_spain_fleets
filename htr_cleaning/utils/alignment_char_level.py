@@ -1,275 +1,227 @@
 """
-alignment.py
+alignment_char_level.py
 
-Contains utilities to achieve hierarchical alignment for step 2 of the pipeline. 
+Character-level alignment utilities for Step 2B of the hierarchical Step 2 refactor.
 
-Previously, we used full-document, character-level alignment
-(with difflib) but this gave meaningless results. The new method of aligning uses
-tokenisation to align at word-level before using character-level alignment on mismatched
-words only.
+This module performs deterministic dynamic-programming alignment between two strings
+(GT word vs HTR word) and emits character-level edit operations:
 
-Step 2A — Word-Level Alignment
-    - Tokenise GT and HTR into token sequences,
-      preserving absolute character spans.
-    - Align token sequences.
-    - Detect word-level operations: equal / replace / insert / delete.
+- equal   (GT char == HTR char)
+- replace (GT char -> HTR char)
+- insert  (Ø -> HTR char)
+- delete  (GT char -> Ø)
 
-Step 2B — Character-Level Alignment (Within Word Substitutions)
-    - For each word-level replacement, perform character-level
-      alignment. Crucially, this operation now happens 
-      inside the mismatched word pair only.
-    - Tag issues as follows:
-        - X : substitution (GT → HTR)
-        - I : insertion (Ø → HTR)
-        - D : deletion (GT → Ø)
+It also converts the op stream into span-based issues anchored in the HTR document
+(using an absolute HTR offset for the start of the word span).
+
+Outputs produced here are "raw Step 2 issues" (tag X/I/D, start/end, gt/htr segment),
+which are later wrapped by processing.py into the canonical issue schema.
 """
 
 from typing import List, Dict, Tuple, Optional
-
-from .alignment_word_level import tokenize_with_spans, align_word_sequences
-from .alignment_char_level import align_chars, char_ops_to_span_issues
 
 
 NULL_CHAR = "Ø"
 
 
 # ----------------------------------------------------------------------
-# Helper functions
+# DP alignment at character-level
 # ----------------------------------------------------------------------
 
-def compute_line_offsets(text: str) -> List[int]:
+def align_chars(gt: str, htr: str) -> List[Tuple[str, Optional[str], Optional[str]]]:
     """
-    Compute global character offsets for the start of each line.
+    Deterministic character-level alignment using edit-distance DP.
 
-    Returns a list where index i contains the 0-based offset of line i.
+    Returns a list of operations of form:
+        (op, gt_char_or_None, htr_char_or_None)
+
+    op is one of: "equal", "replace", "insert", "delete"
+
+    Deterministic tie-break (when costs are equal):
+      diagonal (equal/replace) > delete > insert
+
+    Costs:
+      equal:   0
+      replace: 1
+      insert:  1
+      delete:  1
     """
-    lines = text.splitlines(keepends = True)
-    offsets = []
-    pos = 0
-    for ln in lines:
-        offsets.append(pos)
-        pos += len(ln)
-    return offsets
+    n = len(gt)
+    m = len(htr)
 
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
 
-def find_line_number(offsets: List[int], char_index: int) -> int:
-    """
-    Given line start offsets and a character index, return 1-based line number.
-    """
-    line = 1
-    for i, start in enumerate(offsets):
-        if start > char_index:
-            break
-        line = i + 1
-    return line
+    # base cases
+    for i in range(n + 1):
+        dp[i][0] = i
+    for j in range(m + 1):
+        dp[0][j] = j
 
-
-def spans_overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
-    """
-    Return True if two half-open spans [a_start, a_end) and [b_start, b_end) overlap.
-    """
-    return max(a_start, b_start) < min(a_end, b_end)
-
-
-def _find_deletion_anchor(
-    word_ops: List[Dict],
-    idx: int,
-    last_htr_end: Optional[int],
-    htr_text_len: int) -> int:
-    """
-    For deletions, work out an HTR anchor position. Preference:
-      1) next available HTR token start
-      2) last seen HTR token end
-      3) 0
-    """
-    # Look ahead for next op with HTR token
-    for j in range(idx + 1, len(word_ops)):
-        htr_tok = word_ops[j].get("htr")
-        if htr_tok is not None:
-            return int(htr_tok["start"])
-
-    if last_htr_end is not None:
-        return int(last_htr_end)
-
-    return 0
-
-
-def _compute_step1_overlaps(
-    start: int,
-    end: int,
-    step1_spans: List[Dict]
-) -> List[str]:
-    """
-    Compute Step 1 overlap tags for a Step 2 issue span.
-    For spans of length 0 (deletions), treat as [start, start+1).
-    """
-    overlaps = []
-    a_end = end if end > start else start + 1
-
-    for s1 in step1_spans:
-        s1_start = s1["start"]
-        s1_end = s1["end"]
-        if spans_overlap(start, a_end, s1_start, s1_end):
-            overlaps.append(s1["tag"])
-
-    return sorted(set(overlaps))
-
-
-# ----------------------------------------------------------------------
-# Hierarchical alignment
-# ----------------------------------------------------------------------
-
-def align_and_tag_hierarchical(
-    gt_text: str,
-    htr_text: str,
-    step1_spans: List[Dict],
-    similarity_threshold: float = 0.5
-) -> Tuple[List[Dict], List[Dict]]:
-    """
-    Hierarchical Step 2 alignment.
-
-    Returns:
-      issues: list of span issues (using Step 2 tags X/I/D), anchored in HTR absolute offsets
-      word_ops: the Stage 2A word-level operation stream (for stats/debug)
-    """
-    gt_tokens = tokenize_with_spans(gt_text)
-    htr_tokens = tokenize_with_spans(htr_text)
-
-    word_ops = align_word_sequences(gt_tokens, htr_tokens, similarity_threshold = similarity_threshold)
-
-    htr_line_offsets = compute_line_offsets(htr_text)
-    issues: List[Dict] = []
-
-    last_htr_end: Optional[int] = None
-    htr_len = len(htr_text)
-
-    for idx, op in enumerate(word_ops):
-        op_type = op["op"]
-        gt_tok = op.get("gt")
-        htr_tok = op.get("htr")
-
-        if htr_tok is not None:
-            last_htr_end = int(htr_tok["end"])
-
-        if op_type == "equal":
-            continue
-
-        # --------------------------
-        # Word insertion (Ø → HTR)
-        # --------------------------
-        if op_type == "insert" and htr_tok is not None:
-            start = int(htr_tok["start"])
-            end = int(htr_tok["end"])
-            line_num = find_line_number(htr_line_offsets, start)
-            overlaps_step1 = _compute_step1_overlaps(start, end, step1_spans)
-
-            issues.append({
-                "tag": "I",
-                "start": start,
-                "end": end,
-                "gt": "",
-                "htr": htr_text[start:end],
-                "line": line_num,
-                "overlaps_step1": overlaps_step1,
-
-                # metadata
-                "word_op": "insert",
-                "word_gt": None,
-                "word_htr": htr_tok["text"],
-                "word_htr_span": [start, end],
-                "word_gt_span": None,
-            })
-            continue
-
-        # --------------------------
-        # Word deletion (GT → Ø)
-        # --------------------------
-        if op_type == "delete" and gt_tok is not None:
-            anchor = _find_deletion_anchor(word_ops, idx, last_htr_end, htr_len)
-            start = int(anchor)
-            end = int(anchor)  # point anchor
-            line_num = find_line_number(htr_line_offsets, start)
-            overlaps_step1 = _compute_step1_overlaps(start, end, step1_spans)
-
-            issues.append({
-                "tag": "D",
-                "start": start,
-                "end": end,
-                "gt": gt_tok["text"],
-                "htr": "",
-                "line": line_num,
-                "overlaps_step1": overlaps_step1,
-
-                # metadata
-                "word_op": "delete",
-                "word_gt": gt_tok["text"],
-                "word_htr": None,
-                "word_gt_span": [int(gt_tok["start"]), int(gt_tok["end"])],
-                "word_htr_span": None,
-            })
-            continue
-
-        # --------------------------
-        # Word substitution: run char-level alignment inside word pair only
-        # --------------------------
-        if op_type == "replace" and gt_tok is not None and htr_tok is not None:
-            gt_word = gt_tok["text"]
-            htr_word = htr_tok["text"]
-
-            htr_word_abs_start = int(htr_tok["start"])
-            htr_word_abs_end = int(htr_tok["end"])
-
-            char_ops = align_chars(gt_word, htr_word)
-            span_issues = char_ops_to_span_issues(
-                char_ops = char_ops,
-                htr_abs_start = htr_word_abs_start,
-                gt_word = gt_word,
-                htr_word = htr_word,
+    # fill
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            cost_sub = 0 if gt[i - 1] == htr[j - 1] else 1
+            dp[i][j] = min(
+                dp[i - 1][j] + 1,           # delete
+                dp[i][j - 1] + 1,           # insert
+                dp[i - 1][j - 1] + cost_sub # sub/equal
             )
 
-            # Add additional details to span issues
-            for si in span_issues:
-                start = int(si["start"])
-                end = int(si["end"])
-                line_num = find_line_number(htr_line_offsets, start)
-                overlaps_step1 = _compute_step1_overlaps(start, end, step1_spans)
+    # traceback (deterministic: diag > delete > insert)
+    ops: List[Tuple[str, Optional[str], Optional[str]]] = []
+    i, j = n, m
 
-                issues.append({
-                    "tag": si["tag"],  # X/I/D
-                    "start": start,
-                    "end": end,
-                    "gt": si.get("gt", ""),
-                    "htr": si.get("htr", ""),
-                    "line": line_num,
-                    "overlaps_step1": overlaps_step1,
+    while i > 0 or j > 0:
+        # diagonal preferred
+        if i > 0 and j > 0:
+            cost_sub = 0 if gt[i - 1] == htr[j - 1] else 1
+            if dp[i][j] == dp[i - 1][j - 1] + cost_sub:
+                if cost_sub == 0:
+                    ops.append(("equal", gt[i - 1], htr[j - 1]))
+                else:
+                    ops.append(("replace", gt[i - 1], htr[j - 1]))
+                i -= 1
+                j -= 1
+                continue
 
-                    # metadata
-                    "word_op": "replace",
-                    "word_gt": gt_word,
-                    "word_htr": htr_word,
-                    "word_gt_span": [int(gt_tok["start"]), int(gt_tok["end"])],
-                    "word_htr_span": [htr_word_abs_start, htr_word_abs_end],
-                })
-
+        # delete next
+        if i > 0 and dp[i][j] == dp[i - 1][j] + 1:
+            ops.append(("delete", gt[i - 1], None))
+            i -= 1
             continue
 
-        continue
+        # insert last
+        if j > 0 and dp[i][j] == dp[i][j - 1] + 1:
+            ops.append(("insert", None, htr[j - 1]))
+            j -= 1
+            continue
 
-    return issues, word_ops
+        # Should never happen, but just in case:
+        raise RuntimeError("DP traceback failed (no valid predecessor found).")
+
+    ops.reverse()
+    return ops
 
 
 # ----------------------------------------------------------------------
-# Make backwards-compatible
+# Convert ops -> span issues (anchored in HTR absolute offsets)
 # ----------------------------------------------------------------------
 
-def align_and_tag(
-    gt_text: str,
-    htr_text: str,
-    step1_spans: List[Dict],
-):
+def char_ops_to_span_issues(
+    char_ops: List[Tuple[str, Optional[str], Optional[str]]],
+    htr_abs_start: int,
+    gt_word: str,
+    htr_word: str,
+) -> List[Dict]:
     """
-    Returns only the Step 2 span issues list (tag X/I/D) as expected
-    by the initial processing code.
+    Convert a character op stream into span-based issues anchored in HTR absolute offsets.
+
+    Returns list of dicts each with:
+      - tag: "X" | "I" | "D"
+      - start: abs HTR start offset
+      - end: abs HTR end offset (end may == start for deletions)
+      - gt: substring involved (or "")
+      - htr: substring involved (or "")
+
+    Grouping strategy:
+      - Consecutive ops of the same issue type are merged into a single span issue.
+      - Spans are computed in HTR space:
+          insert/replace consume HTR characters -> span expands
+          delete consumes no HTR char -> anchored at current HTR cursor (point)
     """
-    issues, _word_ops = align_and_tag_hierarchical(gt_text, htr_text, step1_spans)
+    issues: List[Dict] = []
+
+    # cursors within the word strings
+    gt_i = 0
+    htr_i = 0
+
+    # active aggregation
+    active_tag: Optional[str] = None
+    active_start: Optional[int] = None
+    active_end: Optional[int] = None
+    active_gt_parts: List[str] = []
+    active_htr_parts: List[str] = []
+
+    def flush():
+        nonlocal active_tag, active_start, active_end, active_gt_parts, active_htr_parts
+        if active_tag is None:
+            return
+        issues.append({
+            "tag": active_tag,
+            "start": int(active_start) if active_start is not None else int(htr_abs_start + htr_i),
+            "end": int(active_end) if active_end is not None else int(htr_abs_start + htr_i),
+            "gt": "".join(active_gt_parts),
+            "htr": "".join(active_htr_parts),
+        })
+        active_tag = None
+        active_start = None
+        active_end = None
+        active_gt_parts = []
+        active_htr_parts = []
+
+    def begin(tag: str, start: int, end: int):
+        nonlocal active_tag, active_start, active_end
+        active_tag = tag
+        active_start = start
+        active_end = end
+
+    for op, gch, hch in char_ops:
+        if op == "equal":
+            flush()
+            gt_i += 1 if gch is not None else 0
+            htr_i += 1 if hch is not None else 0
+            continue
+
+        if op == "replace":
+            # substitution -> X
+            abs_pos = htr_abs_start + htr_i
+            tag = "X"
+            if active_tag != tag:
+                flush()
+                begin(tag, abs_pos, abs_pos + 1)
+            else:
+                # extend by 1 htr char
+                active_end = (active_end or abs_pos) + 1
+
+            active_gt_parts.append(gch or "")
+            active_htr_parts.append(hch or "")
+
+            gt_i += 1
+            htr_i += 1
+            continue
+
+        if op == "insert":
+            # insertion -> I (consumes HTR)
+            abs_pos = htr_abs_start + htr_i
+            tag = "I"
+            if active_tag != tag:
+                flush()
+                begin(tag, abs_pos, abs_pos + 1)
+            else:
+                active_end = (active_end or abs_pos) + 1
+
+            active_gt_parts.append("")  # Ø
+            active_htr_parts.append(hch or "")
+
+            htr_i += 1
+            continue
+
+        if op == "delete":
+            # deletion -> D (consumes GT, no HTR advance)
+            abs_pos = htr_abs_start + htr_i
+            tag = "D"
+            if active_tag != tag:
+                flush()
+                begin(tag, abs_pos, abs_pos)  # point span
+            # do not extend end for deletions (still point-anchored)
+
+            active_gt_parts.append(gch or "")
+            active_htr_parts.append("")  # Ø
+
+            gt_i += 1
+            continue
+
+        raise ValueError(f"Unknown op: {op}")
+
+    flush()
     return issues
