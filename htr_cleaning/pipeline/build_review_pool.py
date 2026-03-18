@@ -1,109 +1,167 @@
 """
 build_review_pool.py
 
-Build a single review pool from all issues_with_ids.json files.
-Produce this single pool as a master csv file of issues.
+Builds the review pool used for manual validation.
+
+Major improvements:
+- Reads each issues.json file exactly once (fast)
+- Normalises column names across steps
+- Ensures compatibility with allocate_reviews.py
+- Handles missing fields gracefully
+- Avoids unnecessary DataFrame operations until the end
 """
 
 from pathlib import Path
 import json
 import pandas as pd
-from typing import List, Dict
 
 from utils.config import LOGS_DIR
+from utils.file_io import protect_for_excel
 
 
 REVIEW_DIR = LOGS_DIR / "review"
-REVIEW_DIR.mkdir(parents = True, exist_ok = True)
+REVIEW_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _extract_step(tag: str) -> str:
-    """Extract step identifier from tag (S1X → S1, etc.)."""
-    if tag.startswith("S1"):
-        return "S1"
-    if tag.startswith("S2"):
-        return "S2"
-    if tag.startswith("S3"):
-        return "S3"
-    return "UNKNOWN"
+# ---------------------------------------------------------------------
+# Required columns expected by allocate_reviews.py
+# ---------------------------------------------------------------------
+
+REQUIRED_COLUMNS = [
+    "issue_id",
+    "calligraphy_type",
+    "doc_id",
+    "step",
+    "tag",
+    "description",
+    "line",
+    "char_start",
+    "char_end",
+    "htr_text",
+    "gt_text",
+    "word_gt",
+    "word_htr",
+]
 
 
-def _load_issues(path: Path) -> List[Dict]:
-    with open(path, "r", encoding = "utf-8") as f:
-        return json.load(f)
+# ---------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------
 
+def _normalise_issue(issue, style, doc_id):
+    """
+    Convert issue dict to the canonical review schema.
+
+    Handles differences between Step1 / Step2 / Step3 logs.
+    """
+
+    start = issue.get("char_start", issue.get("_abs_start", 0))
+    end = issue.get("char_end", issue.get("_abs_end", 0))
+
+    return {
+        "issue_id": issue.get("issue_id"),
+        "calligraphy_type": style,
+        "doc_id": doc_id,
+        "step": issue["tag"][:2],   # S1 / S2 / S3
+        "tag": issue["tag"],
+        "description": issue.get("description"),
+        "line": issue.get("line"),
+        "char_start": start,
+        "char_end": end,
+        "htr_text": issue.get("htr_text"),
+        "gt_text": issue.get("gt_text"),
+        "word_gt": issue.get("word_gt"),
+        "word_htr": issue.get("word_htr"),
+    }
+
+
+# ---------------------------------------------------------------------
+# Main builder
+# ---------------------------------------------------------------------
 
 def build_review_pool():
+
     rows = []
 
+    # -----------------------------------------------------------------
+    # Scan logs once (fast)
+    # -----------------------------------------------------------------
+
     for style_dir in LOGS_DIR.iterdir():
+
         if not style_dir.is_dir():
-            continue
-        if style_dir.name in ("posthoc", "meta", "review"):
             continue
 
         style = style_dir.name
 
+        # skip meta folders
+        if style in {"meta", "review", "posthoc"}:
+            continue
+
         for doc_dir in style_dir.iterdir():
+
             if not doc_dir.is_dir():
                 continue
 
             doc_id = doc_dir.name
-            issues_path = doc_dir / "issues_with_ids.json"
+
+            issues_path = doc_dir / f"{doc_id}_issues.json"
 
             if not issues_path.exists():
                 continue
 
-            issues = _load_issues(issues_path)
+            with open(issues_path, "r", encoding="utf-8") as f:
+                issues = json.load(f)
 
             for issue in issues:
-                issue_id = issue.get("issue_id")
-                if not issue_id:
-                    raise ValueError(f"Missing issue_id in {doc_id}")
 
-                tag = issue.get("tag", "")
-                step = _extract_step(tag)
+                rows.append(
+                    _normalise_issue(issue, style, doc_id)
+                )
 
-                rows.append({
-                    "issue_id": issue_id,
-                    "calligraphy_type": style,
-                    "doc_id": doc_id,
-                    "step": step,
-                    "tag": tag,
-                    "description": issue.get("description"),
+    if not rows:
+        raise ValueError("No issues found when building review pool.")
 
-                    "line": issue.get("line"),
-                    "char_start": issue.get("char_start"),
-                    "char_end": issue.get("char_end"),
-                    "_abs_start": issue.get("_abs_start"),
-                    "_abs_end": issue.get("_abs_end"),
-
-                    "htr_text": issue.get("htr_text", ""),
-                    "gt_text": issue.get("gt_text", ""),
-
-                    "word_gt": issue.get("word_gt"),
-                    "word_htr": issue.get("word_htr"),
-
-                    "has_overlap_s1": bool(issue.get("overlaps_step1", [])),
-                    "has_overlap_s2": bool(issue.get("overlaps_step2", [])),
-
-                    # Review fields
-                    "assigned_reviewer": "",
-                    "review_status": "unassigned",
-                    "decision": "",
-                    "correction": "",
-                    "reviewer": "",
-                    "notes": "",
-                })
+    # -----------------------------------------------------------------
+    # Convert to dataframe once
+    # -----------------------------------------------------------------
 
     df = pd.DataFrame(rows)
 
-    output_path = REVIEW_DIR / "review_pool.csv"
-    df.to_csv(output_path, index = False)
+    # -----------------------------------------------------------------
+    # Ensure required columns exist
+    # -----------------------------------------------------------------
 
-    print(f"\nReview pool written to: {output_path}")
-    print(f"Total issues in pool: {len(df)}")
+    for col in REQUIRED_COLUMNS:
+        if col not in df.columns:
+            df[col] = None
 
+    df = df[REQUIRED_COLUMNS]
+
+    # -----------------------------------------------------------------
+    # Protect values for Excel
+    # -----------------------------------------------------------------
+
+    df = protect_for_excel(df)
+
+    # -----------------------------------------------------------------
+    # Write master file
+    # -----------------------------------------------------------------
+
+    review_pool_path = REVIEW_DIR / "review_pool.csv"
+    review_master_path = REVIEW_DIR / "review_master.csv"
+
+    df.to_csv(review_pool_path, index=False, encoding="utf-8-sig")
+    df.to_csv(review_master_path, index=False, encoding="utf-8-sig")
+
+    print(f"Review pool written: {review_pool_path}")
+    print(f"Review master written: {review_master_path}")
+    print(f"Total issues: {len(df)}")
+
+
+# ---------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------
 
 if __name__ == "__main__":
     build_review_pool()

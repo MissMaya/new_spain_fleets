@@ -10,6 +10,7 @@ This module ensures:
 - safe ("atomic") writes so output files are never left in a broken or
   partially-written state
 - simple filesystem indexing helpers
+- formatting of outputs likely to be opened in Excel
 
 Pipeline stages import these helpers.
 """
@@ -121,3 +122,34 @@ def index_htr_files_by_style(raw_dir: Path, styles: Iterable[str]) -> dict[str, 
     Return mapping: style -> sorted list of HTR .txt files.
     """
     return {style: index_txt_files(raw_dir / style) for style in styles}
+
+# ---------------------------------------------------------------------
+# Excel formatting helpers
+# ---------------------------------------------------------------------
+def protect_for_excel(df):
+    """
+    Prevent Excel formula parsing of CSV exports by prefixing cells that 
+    start with =, +, -, or @ with a single quote.
+    """
+    def protect(value):
+        if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+            return "'" + value
+        return value
+
+    return df.map(protect)
+
+# ---------------------------------------------------------------------
+# Log naming helpers
+# ---------------------------------------------------------------------
+
+def issues_json_path(doc_dir, doc_id):
+    """
+    Adds the HTR filename to the per-document log of JSON issues.
+    """
+    return doc_dir / f"{doc_id}_issues.json"
+
+def issues_txt_path(doc_dir, doc_id):
+    """
+    Adds the HTR filename to the per-document log of TXT issues.
+    """
+    return doc_dir / f"{doc_id}_issues.txt"

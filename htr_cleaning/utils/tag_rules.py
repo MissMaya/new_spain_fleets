@@ -49,20 +49,17 @@ all_step1_tags = {
 # STEP 3 – Linguistic / paleographic heuristics
 # ----------------------------------------------------------------------
 
-# Q not followed by E or I
-QU_NOT_EI = re.compile(r"QU(?![EI])", re.IGNORECASE)
+# QU not followed by E or I
+QU_NOT_EI = re.compile(r"(?i)\bqu(?![ei])")
 
 # Presence of W or K
-W_OR_K = re.compile(r"[WK]", re.IGNORECASE)
+W_OR_K = re.compile(r"(?i)[wk]")
 
-# Unexpected double consonants (excluding cc, ll, nn, rr)
-DOUBLE_CONSONANT = re.compile(
-    r"(?i)(?<!c)c{2}|(?<!l)l{2}|(?<!n)n{2}|(?<!r)r{2}|"  # guards
-    r"(bb|dd|ff|gg|hh|jj|kk|mm|pp|qq|ss|tt|vv|ww|xx|yy|zz)"
-)
+# Unexpected doubled consonants excluding cc, ll, nn, rr
+DOUBLE_CONSONANT = re.compile(r"(?i)([bdfghjkmmpqstvwxyz])\1")
 
 # Rare final consonants: C F K M P
-RARE_FINAL_CONSONANT = re.compile(r"(?i)\b\w+[CFKMP]\b")
+RARE_FINAL_CONSONANT = re.compile(r"(?i)\b\w+[cfkmp]\b")
 
 # Triple letter repetition
 TRIPLE_LETTER = re.compile(r"(?i)([a-z])\1\1")
@@ -74,3 +71,5 @@ all_step3_tags = {
     "E": RARE_FINAL_CONSONANT,
     "T": TRIPLE_LETTER,
 }
+
+

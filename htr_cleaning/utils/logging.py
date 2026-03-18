@@ -93,7 +93,8 @@ def log_issue(
     calligraphy_type: str,
     document_id: str,
     issue: Dict[str, Any],
-):
+    ):
+
     """
     Append a detected issue to the per-document JSON and TXT logs.
 
@@ -115,16 +116,28 @@ def log_issue(
     doc_log_dir = logs_dir / calligraphy_type / document_id
     doc_log_dir.mkdir(parents = True, exist_ok = True)
 
-    json_path = doc_log_dir / "issues.json"
-    txt_path  = doc_log_dir / "issues.txt"
+    json_path = doc_log_dir / f"{document_id}_issues.json"
+    txt_path = doc_log_dir / f"{document_id}_issues.txt"
 
     existing = load_json_if_exists(json_path, default=[])
 
     if not is_duplicate(existing, issue):
-        # Update JSON log
+
+        # add issue
         existing.append(issue)
+
+        # sort in order of line number and character positions 
+        existing.sort(
+            key = lambda x: (
+                x.get("line", 0),
+                x.get("_abs_start", 0),
+                x.get("char_start", 0),
+            )
+        )
+
+        # write JSON
         safe_write_json(existing, json_path)
 
-        # Append human-readable TXT log
+        # append TXT log
         with open(txt_path, "a", encoding = "utf-8") as f:
             f.write(format_issue_for_text(issue))

@@ -22,21 +22,26 @@ or via:
 """
 
 from utils.config import LOGS_DIR, SCHEMAS_DIR
-from utils.file_io import load_json_if_exists, read_json
+from utils.file_io import load_json_if_exists, read_json, issues_json_path
 from utils.processing import process_step3_issues
 from utils.visualise import generate_all_outputs
 
 
-def _load_spans_by_file(tag_set):
+def _load_step1_and_step2_spans(step1_tags, step2_tags):
     """
-    Load spans from logs for tags in tag_set.
-    Returns dict: doc_id -> list of span dicts.
+    Load Step 1 and Step 2 spans from logs in a single pass.
+
+    Returns:
+        step1_spans_by_file, step2_spans_by_file
     """
 
-    spans_by_file = {}
+    step1_spans_by_file = {}
+    step2_spans_by_file = {}
 
     for style_dir in LOGS_DIR.iterdir():
         if not style_dir.is_dir():
+            continue
+        if style_dir.name in {"meta", "posthoc", "review"}:
             continue
 
         for doc_dir in style_dir.iterdir():
@@ -44,27 +49,42 @@ def _load_spans_by_file(tag_set):
                 continue
 
             doc_id = doc_dir.name
-            issues_path = doc_dir / "issues.json"
+            issues_path = issues_json_path(doc_dir, doc_id)
 
             if not issues_path.exists():
                 continue
 
             issues = load_json_if_exists(issues_path, [])
 
-            spans = [
-                {
-                    "tag": i["tag"],
-                    "start": i["_abs_start"],
-                    "end": i["_abs_end"],
+            step1_spans = []
+            step2_spans = []
+
+            for i in issues:
+                tag = i.get("tag")
+                start = i.get("_abs_start")
+                end = i.get("_abs_end")
+
+                if tag is None or start is None or end is None:
+                    continue
+
+                span = {
+                    "tag": tag,
+                    "start": start,
+                    "end": end,
                 }
-                for i in issues
-                if i.get("tag") in tag_set and "_abs_start" in i
-            ]
 
-            if spans:
-                spans_by_file[doc_id] = spans
+                if tag in step1_tags:
+                    step1_spans.append(span)
+                elif tag in step2_tags:
+                    step2_spans.append(span)
 
-    return spans_by_file
+            if step1_spans:
+                step1_spans_by_file[doc_id] = step1_spans
+
+            if step2_spans:
+                step2_spans_by_file[doc_id] = step2_spans
+
+    return step1_spans_by_file, step2_spans_by_file
 
 
 def run_step3():
@@ -74,7 +94,9 @@ def run_step3():
     train_pairs = load_json_if_exists(meta_dir / "train_pairs.json", [])
 
     if not train_pairs:
-        raise RuntimeError("No training pairs found. Please run run_split.py and tagging for Steps 1 and 2 first.")
+        raise RuntimeError(
+            "No training pairs found. Please run run_split.py and tagging for Steps 1 and 2 first."
+        )
 
     # ------------------------------------------------------------------
     # Load schema
@@ -87,22 +109,24 @@ def run_step3():
     step2_tags = {f"S2{t}" for t in tag_schema["S2"].keys()}
 
     # ------------------------------------------------------------------
-    # Reload Step 1 + Step 2 spans
+    # Reload Step 1 + Step 2 spans in one pass
     # ------------------------------------------------------------------
 
-    step1_spans_by_file = _load_spans_by_file(step1_tags)
-    step2_spans_by_file = _load_spans_by_file(step2_tags)
+    step1_spans_by_file, step2_spans_by_file = _load_step1_and_step2_spans(
+        step1_tags,
+        step2_tags,
+    )
 
     # ------------------------------------------------------------------
     # Run Step 3 processing
     # ------------------------------------------------------------------
 
     error_counts_by_style = process_step3_issues(
-        train_pairs = train_pairs,
-        step1_spans_by_file = step1_spans_by_file,
-        step2_spans_by_file = step2_spans_by_file,
-        tag_schema = tag_schema,
-        logs_dir = LOGS_DIR,
+        train_pairs=train_pairs,
+        step1_spans_by_file=step1_spans_by_file,
+        step2_spans_by_file=step2_spans_by_file,
+        tag_schema=tag_schema,
+        logs_dir=LOGS_DIR,
     )
 
     # ------------------------------------------------------------------

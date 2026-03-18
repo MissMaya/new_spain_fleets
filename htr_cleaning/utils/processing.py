@@ -25,7 +25,7 @@ from collections import defaultdict
 
 from utils.logging import log_issue
 from utils.alignment import align_and_tag, NULL_CHAR, spans_overlap
-from utils.file_io import safe_write_json, read_text
+from utils.file_io import safe_write_json, read_text, issues_json_path, load_json_if_exists
 from utils.tag_rules import all_step3_tags
 from utils.normalisation import normalise_pair
 
@@ -87,10 +87,6 @@ def process_step1_issues(
 ):
     """
     Step 1: apply rule-based regex tags to HTR text.
-
-    Writes per-document issues.json and returns:
-      - error_counts_by_style
-      - step1_spans_by_file (spans used to compute overlaps)
     """
 
     error_counts_by_style = {style: defaultdict(int) for style in calligraphy_types}
@@ -108,6 +104,7 @@ def process_step1_issues(
 
         for code, regex in step1_tags.items():
             for match in regex.finditer(text):
+
                 start = match.start()
                 end = match.end()
 
@@ -135,7 +132,6 @@ def process_step1_issues(
 
                 issues.append(issue)
 
-                # absolute spans used later for overlap checks
                 step1_spans_by_file[doc_id].append(
                     {"tag": tag, "start": start, "end": end}
                 )
@@ -144,7 +140,7 @@ def process_step1_issues(
 
         doc_dir = logs_dir / style / doc_id
         doc_dir.mkdir(parents = True, exist_ok = True)
-        safe_write_json(issues, doc_dir / "issues.json")
+        safe_write_json(issues, issues_json_path(doc_dir, doc_id))
 
     return error_counts_by_style, step1_spans_by_file
 
@@ -161,21 +157,16 @@ def process_step2_issues(
 ):
     """
     Step 2: align GT<->HTR and tag with Step 2 tags.
-
-    Returns:
-      - confusion_by_style (GT char x HTR char, including Ø for deletion)
-      - overlap_metadata (S1<->S2)
-      - step2_spans_by_file (spans for working out overlaps)
     """
 
     confusion_by_style = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     overlap_totals = defaultdict(int)
     overlap_by_style = defaultdict(lambda: defaultdict(int))
 
-    # IMPORTANT: overlap logic expects start/end keys
     step2_spans_by_file = defaultdict(list)
 
     for pair in train_pairs:
+
         style = pair["style"]
         doc_id = pair["id"]
 
@@ -186,27 +177,30 @@ def process_step2_issues(
 
         issues = align_and_tag(gt_text_full, htr_text_full, step1_spans)
 
-        # Precompute line offsets once per doc for line/char conversion
         line_offsets = _compute_line_offsets(htr_text_full)
 
+        doc_issues = []
+
         for issue in issues:
-            # Keep segments for confusion matrix BEFORE we rename keys
+
             gt_seg = issue.get("gt") or ""
             htr_seg = issue.get("htr") or ""
 
-            raw_tag = issue["tag"]     # e.g. "I"
-            full_tag = f"S2{raw_tag}"  # e.g. "S2I"
+            raw_tag = issue["tag"]
+            full_tag = f"S2{raw_tag}"
+
             issue["tag"] = full_tag
             issue["description"] = tag_schema["S2"][raw_tag]
 
-            # Unify to schema
             start = issue.pop("start")
             end = issue.pop("end")
+
             issue["_abs_start"] = start
             issue["_abs_end"] = end
 
             line = _find_line_number(line_offsets, start)
             issue["line"] = line
+
             issue["char_start"] = start - line_offsets[line - 1] + 1
             issue["char_end"] = max(issue["char_start"], end - line_offsets[line - 1])
 
@@ -218,25 +212,19 @@ def process_step2_issues(
 
             issue["review"] = {"status": "unreviewed"}
 
-            log_issue(
-                logs_dir=logs_dir,
-                calligraphy_type=style,
-                document_id=doc_id,
-                issue=issue,
-            )
+            doc_issues.append(issue)
 
-            # Store spans in the simple format Step 3 expects for overlap checks
             step2_spans_by_file[doc_id].append(
                 {"tag": full_tag, "start": start, "end": end}
             )
 
-            # Confusion matrix (character-level)
             gt_seg = issue["gt_text"] if issue["gt_text"] else NULL_CHAR
             htr_seg = issue["htr_text"] if issue["htr_text"] else NULL_CHAR
 
             max_len = max(len(gt_seg), len(htr_seg))
 
             for i in range(max_len):
+
                 g_raw = gt_seg[i] if i < len(gt_seg) else NULL_CHAR
                 h_raw = htr_seg[i] if i < len(htr_seg) else NULL_CHAR
 
@@ -244,13 +232,26 @@ def process_step2_issues(
 
                 confusion_by_style[style][g][h] += 1
 
-            # Overlap tracking (S1<->S2)
             if issue["overlaps_step1"]:
                 overlap_totals["total"] += 1
                 overlap_by_style[style]["total"] += 1
                 for t in issue["overlaps_step1"]:
                     overlap_by_style[style][t] += 1
 
+        doc_dir = logs_dir / style / doc_id
+        doc_dir.mkdir(parents = True, exist_ok = True)
+
+        issues_path = issues_json_path(doc_dir, doc_id)
+
+        # Load existing Step-1 issues
+        existing_issues = load_json_if_exists(issues_path, [])
+
+        # Append Step-2 issues
+        existing_issues.extend(doc_issues)
+
+        # Write combined issues
+        safe_write_json(existing_issues, issues_path)
+        
     overlap_metadata = {
         "overall": dict(overlap_totals),
         "by_style": {k: dict(v) for k, v in overlap_by_style.items()},
@@ -258,6 +259,7 @@ def process_step2_issues(
 
     posthoc_dir = logs_dir / "posthoc"
     posthoc_dir.mkdir(parents = True, exist_ok = True)
+
     safe_write_json(overlap_metadata, posthoc_dir / "s1_s2_overlap.json")
 
     return confusion_by_style, overlap_metadata, step2_spans_by_file
@@ -295,6 +297,8 @@ def process_step3_issues(
 
         line_offsets = _compute_line_offsets(htr_text)
 
+        doc_issues = []
+
         for raw_tag, regex in all_step3_tags.items():
             for match in regex.finditer(htr_text):
                 full_tag = f"S3{raw_tag}"
@@ -315,7 +319,7 @@ def process_step3_issues(
                     if spans_overlap(start, end, s1["start"], s1["end"])
                 ]
 
-                # Overlaps with Step 2 (Step 2 spans are {tag,start,end})
+                # Overlaps with Step 2
                 overlapping_s2 = [
                     s2["tag"]
                     for s2 in step2_spans
@@ -342,12 +346,7 @@ def process_step3_issues(
                     "_abs_end": end,
                 }
 
-                log_issue(
-                    logs_dir = logs_dir,
-                    calligraphy_type = style,
-                    document_id = doc_id,
-                    issue = issue,
-                )
+                doc_issues.append(issue)
 
                 error_counts_by_style[style][full_tag] += 1
 
@@ -357,8 +356,21 @@ def process_step3_issues(
                 for t in overlapping_s2:
                     s2_s3_overlap[style][t] += 1
 
+        # --------------------------------------------------------------
+        # Write once per document
+        # --------------------------------------------------------------
+
+        doc_dir = logs_dir / style / doc_id
+        doc_dir.mkdir(parents = True, exist_ok = True)
+
+        # Step 1 + Step 2 issues should already be in the file; append Step 3 issues
+        existing_issues = load_json_if_exists(issues_json_path(doc_dir, doc_id), [])
+        combined = existing_issues + doc_issues
+
+        safe_write_json(combined, issues_json_path(doc_dir, doc_id))
+
     posthoc_dir = logs_dir / "posthoc"
-    posthoc_dir.mkdir(parents = True, exist_ok = True)
+    posthoc_dir.mkdir(parents=True, exist_ok=True)
 
     safe_write_json(
         {k: dict(v) for k, v in s1_s3_overlap.items()},

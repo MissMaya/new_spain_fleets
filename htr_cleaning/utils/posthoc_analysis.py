@@ -30,6 +30,7 @@ import matplotlib.pyplot as plt
 
 from utils.file_io import load_json_if_exists, safe_write_json
 from utils.config import LOGS_DIR
+from utils.file_io import issues_json_path
 
 
 # ---------------------------------------------------------------------
@@ -65,7 +66,8 @@ def count_tags_from_logs(prefix: str):
             if not doc_dir.is_dir():
                 continue
 
-            issues_path = doc_dir / "issues.json"
+            doc_id = doc_dir.name
+            issues_path = issues_json_path(doc_dir, doc_id)
             if not issues_path.exists():
                 continue
 

@@ -26,6 +26,7 @@ from utils.config import LOGS_DIR, SCHEMAS_DIR
 from utils.file_io import load_json_if_exists, read_json
 from utils.processing import process_step2_issues
 from utils.visualise import write_confusion_matrices
+from utils.file_io import issues_json_path
 
 
 def _load_step1_spans(tag_schema):
@@ -50,7 +51,7 @@ def _load_step1_spans(tag_schema):
                 continue
 
             doc_id = doc_dir.name
-            issues_path = doc_dir / "issues.json"
+            issues_path = issues_json_path(doc_dir, doc_id)
 
             if not issues_path.exists():
                 continue

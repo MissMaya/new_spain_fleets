@@ -494,7 +494,7 @@ def rank_and_sample():
         "stage_weights": STAGE_WEIGHTS,
         "quota_per_style_base": int(quota_per_style),
         "seed": int(RANDOM_SEED),
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).strftime("%d-%m-%Y %H:%M UTC"),
         "diagnostics_top_n": int(TOP_N_DIAGNOSTICS),
         "styles": styles,
         "stage_distribution_full_pool": _stage_distribution(df),

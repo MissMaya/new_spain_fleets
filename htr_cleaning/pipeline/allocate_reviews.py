@@ -26,6 +26,7 @@ import json
 import pandas as pd
 
 from utils.config import LOGS_DIR
+from utils.file_io import protect_for_excel
 
 
 # ------------------------------------------------------------------
@@ -178,8 +179,9 @@ def allocate_reviews():
     allocated = allocated.sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True)
 
     # Write master-with-allocations (full; useful for audit/debug)
+    allocated = protect_for_excel(allocated)
     master_out = REVIEW_DIR / "review_master_with_allocations.csv"
-    allocated.to_csv(master_out, index=False)
+    allocated.to_csv(master_out, index = False, encoding = "utf-8-sig")
 
     # ------------------------------------------------------------
     # Write simplified per-reviewer sheets

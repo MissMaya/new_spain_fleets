@@ -135,7 +135,7 @@ def align_and_tag_hierarchical(
     gt_tokens = tokenise_with_spans(gt_text)
     htr_tokens = tokenise_with_spans(htr_text)
 
-    word_ops = align_word_sequences(gt_tokens, htr_tokens, similarity_threshold = similarity_threshold)
+    word_ops = align_word_sequences(gt_tokens, htr_tokens)
 
     htr_line_offsets = compute_line_offsets(htr_text)
     issues: List[Dict] = []
