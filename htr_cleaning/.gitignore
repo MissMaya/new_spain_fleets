@@ -7,4 +7,5 @@ data/
 logs/
 outputs/
 zips/
-
+example_txt/
+temp_scripts/
