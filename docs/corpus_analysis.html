@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="utf-8">
+
+<title>HTR Corpus Diagnostics – Analysis</title>
+
+<style>
+
+body{
+font-family: system-ui, -apple-system, Segoe UI, Roboto;
+max-width: 950px;
+margin: 40px auto;
+line-height: 1.65;
+color: #222;
+}
+
+h1,h2,h3{
+margin-top: 1.8em;
+margin-bottom: 0.4em;
+}
+
+.meta{
+background:#f4f6f8;
+padding:18px;
+border-radius:8px;
+margin-bottom:28px;
+border:1px solid #dfe3e8;
+}
+
+.section{
+margin-bottom:32px;
+}
+
+.prompt{
+color:#666;
+font-size:0.95em;
+margin-top:6px;
+margin-bottom:12px;
+}
+
+.nav{
+background:#fafafa;
+padding:14px;
+border-radius:8px;
+border:1px solid #e3e6ea;
+margin-bottom:30px;
+}
+
+.nav ul{
+margin:6px 0 0 18px;
+}
+
+.note{
+background:#fff8e6;
+padding:12px;
+border-left:4px solid #e0a800;
+margin:16px 0;
+}
+
+.small{
+font-size:0.9em;
+color:#666;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Analysis of HTR Corpus Diagnostics Report</h1>
+
+<div class="meta">
+
+<p><strong>Corpus:</strong> New Spain Fleets</p>
+
+<p><strong>Report file:</strong> corpus_report.html</p>
+
+<p><strong>Analysis version:</strong> v1.0</p>
+
+<p><strong>Date of analysis:</strong> [INSERT DATE]</p>
+
+<p><strong>Pipeline version:</strong> v1.0</p>
+
+<p><strong>Related report:</strong> 
+<a href="corpus_report.html">open corpus report</a>
+</p>
+
+</div>
+
+
+<div class="nav">
+
+<strong>Structure of analysis</strong>
+
+<ul>
+
+<li>Overview of corpus</li>
+
+<li>Distribution of issues across pipeline stages</li>
+
+<li>Overall transcription divergence</li>
+
+<li>Alignment drift</li>
+
+<li>Error concentration across documents</li>
+
+<li>Structural error behaviour</li>
+
+<li>Character-level behaviour</li>
+
+<li>Positional behaviour</li>
+
+<li>Style-level observations</li>
+
+<li>Implications for downstream machine learning</li>
+
+<li>Extensibility of approach</li>
+
+<li>Summary of findings</li>
+
+</ul>
+
+</div>
+
+
+<div class="section">
+
+<h2>1. Overview of the corpus</h2>
+
+<div class="prompt">
+
+Describe corpus size, structure, and composition by style.
+
+Reference:
+
+• number of documents  
+• distribution across styles  
+• differences in corpus geometry  
+• overall level of transcription divergence  
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>2. Distribution of issues across pipeline stages</h2>
+
+<div class="prompt">
+
+Explain relative contribution of S1, S2, and S3 issues.
+
+Clarify:
+
+• proportion of issues driven by GT–HTR mismatch  
+• extent to which preprocessing or orthographic rules explain error  
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>3. Overall transcription divergence</h2>
+
+<h3>CER by style</h3>
+
+<div class="prompt">
+
+Describe relative transcription difficulty across styles using mean and median CER.
+
+Comment on skew (mean vs median differences).
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>4. Alignment drift</h2>
+
+<div class="prompt">
+
+Explain drift behaviour across styles.
+
+Clarify difference between:
+
+• local transcription error  
+• structural misalignment  
+
+Comment on implications for interpreting CER.
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>5. Concentration of error across documents</h2>
+
+<div class="prompt">
+
+Explain Lorenz curves and Gini coefficient.
+
+Identify whether a small subset of documents contributes disproportionately to total edits.
+
+Discuss presence of high-burden document subsets.
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>6. Structural error behaviour</h2>
+
+<h3>Edit composition</h3>
+
+<div class="prompt">
+
+Describe distribution of substitutions, insertions, and deletions.
+
+Explain implications of deletion-dominated error structure.
+
+</div>
+
+<p>
+
+</p>
+
+
+<h3>Token boundary instability</h3>
+
+<div class="prompt">
+
+Explain split and merge behaviour.
+
+Discuss relationship to calligraphic style.
+
+Comment on observed boundary edit rates.
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>7. Character-level behaviour</h2>
+
+<h3>Character substitutions</h3>
+
+<div class="prompt">
+
+Describe systematic character confusions by style.
+
+Highlight patterns linked to calligraphic form.
+
+</div>
+
+<p>
+
+</p>
+
+
+<h3>Bigram substitutions</h3>
+
+<div class="prompt">
+
+Describe frequent bigram confusions.
+
+Explain relevance for stroke-level ambiguity.
+
+</div>
+
+<p>
+
+</p>
+
+
+<h3>Word-level confusions</h3>
+
+<div class="prompt">
+
+Summarise recurring lexical confusions.
+
+Note influence of abbreviation and orthographic variation.
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>8. Positional behaviour</h2>
+
+<div class="prompt">
+
+Summarise positional error distributions.
+
+Discuss whether errors cluster:
+
+• at particular line positions  
+• at particular character positions  
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>9. Style-level observations</h2>
+
+<div class="prompt">
+
+Summarise distinctive structural characteristics of each style.
+
+Highlight differences in:
+
+• CER  
+• drift  
+• edit composition  
+• boundary behaviour  
+• error concentration  
+
+Explain what new information the pipeline contributes beyond prior expectations.
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>10. Implications for downstream machine learning</h2>
+
+<div class="prompt">
+
+Summarise signals most relevant for model refinement.
+
+Possible themes:
+
+• high-drift documents  
+• high-burden documents  
+• clean subsets  
+• deletion-dominated errors  
+• token boundary instability  
+• style-specific error structure  
+
+Explain how diagnostics inform data selection and evaluation strategy.
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>11. Extensibility of the diagnostic approach</h2>
+
+<div class="prompt">
+
+Explain potential applicability to other HTR corpora.
+
+Clarify which measures are corpus-independent.
+
+Explain how approach could generalise across scripts.
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>12. Summary of findings</h2>
+
+<div class="prompt">
+
+Concise synthesis of key findings.
+
+Short paragraph summarising methodological contribution.
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+<div class="section">
+
+<h2>13. TL;DR</h2>
+
+<div class="prompt">
+
+Provide concise bullet-point summary of main findings.
+
+</div>
+
+<p>
+
+</p>
+
+</div>
+
+
+
+</body>
+
+</html>
