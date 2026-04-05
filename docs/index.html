@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="utf-8">
+
+<title>HTR Corpus Diagnostics</title>
+
+<style>
+
+body{
+font-family: system-ui, -apple-system, Segoe UI, Roboto;
+max-width: 900px;
+margin: 40px auto;
+line-height: 1.65;
+color: #222;
+background:#ffffff;
+}
+
+h1{
+margin-bottom:0.2em;
+}
+
+.subtitle{
+color:#666;
+margin-bottom:30px;
+}
+
+.card{
+border:1px solid #e2e5e9;
+border-radius:10px;
+padding:22px;
+margin-bottom:26px;
+background:#fafbfc;
+}
+
+.meta{
+font-size:0.95em;
+color:#555;
+margin-top:8px;
+}
+
+a{
+color:#1a4fb5;
+text-decoration:none;
+}
+
+a:hover{
+text-decoration:underline;
+}
+
+.table{
+width:100%;
+border-collapse:collapse;
+margin-top:14px;
+}
+
+.table th{
+text-align:left;
+padding:8px;
+border-bottom:2px solid #e3e6ea;
+}
+
+.table td{
+padding:8px;
+border-bottom:1px solid #e3e6ea;
+}
+
+.small{
+font-size:0.9em;
+color:#666;
+margin-top:18px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+
+<h1>HTR Corpus Diagnostics</h1>
+
+<div class="subtitle">
+
+Diagnostic outputs from the staged HTR cleaning pipeline for historical Spanish calligraphy.
+
+</div>
+
+
+<div class="card">
+
+<h2>Latest report</h2>
+
+<table class="table">
+
+<tr>
+<th>Output</th>
+<th>Link</th>
+<th>Description</th>
+</tr>
+
+<tr>
+
+<td>Corpus report</td>
+
+<td>
+<a href="corpus_report.html">open</a>
+</td>
+
+<td>
+Full diagnostic output including corpus structure, CER, alignment drift, structural error patterns, and character-level behaviour.
+</td>
+
+</tr>
+
+<tr>
+
+<td>Analysis</td>
+
+<td>
+<a href="corpus_analysis.html">open</a>
+</td>
+
+<td>
+Interpretation of report outputs and implications for downstream machine learning.
+</td>
+
+</tr>
+
+</table>
+
+
+<div class="meta">
+
+Report version: v1.0<br>
+Generated: [INSERT DATE]
+
+</div>
+
+</div>
+
+
+
+<div class="card">
+
+<h2>About the diagnostics</h2>
+
+<p>
+
+The staged cleaning pipeline provides a structured assessment of transcription divergence between HTR outputs and expert-generated ground truth (GT).  
+
+The diagnostics focus on identifying where transcription error is concentrated and how it manifests structurally, rather than automatically correcting text.
+
+</p>
+
+<p>
+
+Outputs are intended to support:
+
+</p>
+
+<ul>
+
+<li>evaluation of corpus quality</li>
+
+<li>identification of high-drift documents</li>
+
+<li>analysis of structural and character-level error patterns</li>
+
+<li>evidence-based data selection for downstream model refinement</li>
+
+</ul>
+
+</div>
+
+
+
+<div class="card">
+
+<h2>How to use the outputs</h2>
+
+<ul>
+
+<li>Open the corpus report to inspect quantitative diagnostics</li>
+
+<li>Open the analysis to view interpretation of the findings</li>
+
+<li>Consult both documents together for context</li>
+
+</ul>
+
+<p class="small">
+
+The diagnostics form part of a digital humanities workflow designed to preserve transparency between transcription evidence and model development.
+
+</p>
+
+</div>
+
+
+
+<div class="card">
+
+<h2>Future versions</h2>
+
+<p>
+
+Additional report versions may be added as the corpus evolves or as pipeline methods are extended.
+
+</p>
+
+</div>
+
+
+
+</body>
+
+</html>
