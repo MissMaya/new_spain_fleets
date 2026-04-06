@@ -85,14 +85,14 @@ margin-top:18px;
 
 <div class="subtitle">
 
-Diagnostic outputs from the staged HTR cleaning pipeline for historical Spanish calligraphy.
+Diagnostic outputs from the 3-stage HTR cleaning pipeline for historical Spanish calligraphy.
 
 </div>
 
 
 <div class="card">
 
-<h2>Latest report</h2>
+<h2>Output and analysis</h2>
 
 <table class="table">
 
@@ -111,7 +111,7 @@ Diagnostic outputs from the staged HTR cleaning pipeline for historical Spanish 
 </td>
 
 <td>
-Full diagnostic output including corpus structure, CER, alignment drift, structural error patterns, and character-level behaviour.
+Full diagnostic output including breakdown of corpus structure, CER, alignment drift, structural error patterns, and word and character-level behaviour.
 </td>
 
 </tr>
@@ -136,7 +136,8 @@ Interpretation of report outputs and implications for downstream machine learnin
 <div class="meta">
 
 Report version: v1.0<br>
-Generated: [INSERT DATE]
+Generated:
+<span id="last-updated"></span>
 
 </div>
 
@@ -214,6 +215,26 @@ Additional report versions may be added as the corpus evolves or as pipeline met
 
 </div>
 
+
+
+<script>
+
+const d = new Date(document.lastModified);
+
+const months = [
+"Jan","Feb","Mar","Apr","May","Jun",
+"Jul","Aug","Sep","Oct","Nov","Dec"
+];
+
+const formatted =
+String(d.getDate()).padStart(2,"0") + " " +
+months[d.getMonth()] + " " +
+String(d.getFullYear()).slice(2);
+
+document.getElementById("last-updated").textContent =
+formatted;
+
+</script>
 
 
 </body>
