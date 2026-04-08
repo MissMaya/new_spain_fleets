@@ -12,7 +12,7 @@ Creates the report by:
 
 Note
 ------------
-True CER is always computed from GT/HTR text directly 
+True CER is always computed from GT/HTR text directly
 rather than being inferred from logged issue counts.
 """
 
@@ -360,6 +360,241 @@ def doc_block_rows(rows: list[dict], block_type: str) -> list[list[object]]:
 
 
 # ---------------------------------------------------------------------
+# Appendix builder
+# ---------------------------------------------------------------------
+
+def calculations_appendix() -> str:
+    """
+    Build the HTML appendix describing key calculations used in the report.
+    """
+    return """
+<section id="calculations">
+<h2>Appendix A. Calculation Definitions</h2>
+
+<p>
+This appendix summarises how key diagnostic measures reported above are calculated.
+All metrics are derived directly from alignment between Ground Truth (GT) and HTR transcription text.
+</p>
+
+<details>
+<summary><strong>Character Error Rate (CER)</strong></summary>
+
+<p>
+CER measures the proportion of characters that must be edited to transform the HTR text into the GT text.
+True CER is computed directly from full text alignment rather than from issue counts.
+</p>
+
+<p><code>CER = (S + I + D) / N</code></p>
+
+<ul>
+<li><strong>S</strong> = substitutions</li>
+<li><strong>I</strong> = insertions</li>
+<li><strong>D</strong> = deletions</li>
+<li><strong>N</strong> = number of characters in GT</li>
+</ul>
+
+</details>
+
+
+<details>
+<summary><strong>Edit Operations</strong></summary>
+
+<p>
+Character-level edits are obtained using Levenshtein alignment between GT and HTR text.
+Each difference is classified as:
+</p>
+
+<ul>
+<li><strong>Substitution</strong>: one character replaced by another</li>
+<li><strong>Insertion</strong>: extra character present in HTR</li>
+<li><strong>Deletion</strong>: character missing from HTR</li>
+</ul>
+
+<p><code>Total edits = S + I + D</code></p>
+
+</details>
+
+
+<details>
+<summary><strong>Drift Rate</strong></summary>
+
+<p>
+Drift measures structural misalignment between GT and HTR sequences.
+A document is classified as high drift when insertions and deletions together form a large proportion of total edits.
+</p>
+
+<p><code>Drift ratio = (I + D) / (S + I + D)</code></p>
+
+<p>
+Documents are flagged as high drift when the ratio exceeds <strong>0.40</strong>.
+This threshold can be adjusted.
+</p>
+
+</details>
+
+
+<details>
+<summary><strong>Edit Burden (Document Contribution to Error)</strong></summary>
+
+<p>
+Edit burden measures how much each document contributes to the total number of character-level edits in the corpus.
+</p>
+
+<p><code>Burden(doc) = edits(doc) / total edits(corpus)</code></p>
+
+<p>
+High-burden documents contribute disproportionately to overall error levels.
+</p>
+
+</details>
+
+
+<details>
+<summary><strong>Gini Coefficient (Error Concentration)</strong></summary>
+
+<p>
+The Gini coefficient measures how unevenly errors are distributed across documents within a style.
+</p>
+
+<ul>
+<li><strong>0</strong> = errors evenly distributed</li>
+<li><strong>1</strong> = errors concentrated in a small number of documents</li>
+</ul>
+
+<p>
+Higher values indicate that a small subset of documents accounts for a large proportion of edits.
+</p>
+
+</details>
+
+
+<details>
+<summary><strong>Lorenz Curve</strong></summary>
+
+<p>
+The Lorenz curve plots cumulative proportion of total edits against cumulative proportion of documents, ordered from lowest to highest edit contribution.
+</p>
+
+<p>
+It visualises the extent to which error is concentrated in a subset of documents.
+</p>
+
+</details>
+
+
+<details>
+<summary><strong>Mean and Median CER</strong></summary>
+
+<p>
+Mean CER represents the average document-level CER within a style.
+</p>
+
+<p>
+Median CER represents the midpoint CER value when documents are ranked from lowest to highest CER.
+</p>
+
+<p>
+Differences between mean and median indicate skew in transcription difficulty across documents.
+</p>
+
+</details>
+
+
+<details>
+<summary><strong>Token Boundary Instability (Splits and Merges)</strong></summary>
+
+<p>
+Token boundary instability measures differences in token segmentation between GT and HTR text.
+</p>
+
+<ul>
+<li><strong>Split</strong>: one GT token corresponds to multiple HTR tokens</li>
+<li><strong>Merge</strong>: multiple GT tokens correspond to one HTR token</li>
+</ul>
+
+<p>
+Rates are normalised per 1,000 GT tokens:
+</p>
+
+<p><code>Split rate = splits / GT tokens × 1000</code></p>
+<p><code>Merge rate = merges / GT tokens × 1000</code></p>
+
+</details>
+
+
+<details>
+<summary><strong>Character Substitution Frequencies</strong></summary>
+
+<p>
+Character substitution frequencies count how often one character in GT is replaced by another character in HTR.
+</p>
+
+<p>
+These frequencies help identify systematic character-level confusions.
+</p>
+
+</details>
+
+
+<details>
+<summary><strong>Bigram Substitution Frequencies</strong></summary>
+
+<p>
+Bigram substitutions compare aligned two-character sequences between GT and HTR text.
+</p>
+
+<p>
+They help identify recurring stroke-level ambiguities affecting adjacent character combinations.
+</p>
+
+</details>
+
+
+<details>
+<summary><strong>Positional Error Distribution</strong></summary>
+
+<p>
+Errors are mapped to their relative position within each line:
+</p>
+
+<p><code>relative position = character index / line length</code></p>
+
+<p>
+Positions are grouped into quartiles:
+</p>
+
+<ul>
+<li>0–25%</li>
+<li>25–50%</li>
+<li>50–75%</li>
+<li>75–100%</li>
+</ul>
+
+<p>
+This identifies whether errors tend to occur at particular locations within lines.
+</p>
+
+</details>
+
+
+<details>
+<summary><strong>Line Position Error Distribution</strong></summary>
+
+<p>
+Errors are grouped by line number within documents using predefined line buckets.
+</p>
+
+<p>
+This allows assessment of whether errors cluster at particular structural positions within documents.
+</p>
+
+</details>
+
+</section>
+"""
+
+
+# ---------------------------------------------------------------------
 # Main report builder
 # ---------------------------------------------------------------------
 
@@ -480,9 +715,7 @@ def build_corpus_report() -> None:
     # Metadata and scope
     # -----------------------------------------------------------------
 
-    meta_section = (
-       html_table(meta_headers, meta_rows, datatable = False)
-    )
+    meta_section = html_table(meta_headers, meta_rows, datatable = False)
     sections.append(section("Metadata", meta_section, open_by_default = True))
 
     # -----------------------------------------------------------------
@@ -529,7 +762,13 @@ def build_corpus_report() -> None:
             )
         )
     )
-    sections.append(section("Corpus description and issue overview", overview_section, open_by_default = True))
+    sections.append(
+        section(
+            "Corpus description and issue overview",
+            overview_section,
+            open_by_default = True,
+        )
+    )
 
     # -----------------------------------------------------------------
     # Primary style comparison
@@ -546,7 +785,13 @@ def build_corpus_report() -> None:
             csv_name = "primary_style_comparison",
         )
     )
-    sections.append(section("Primary style comparison", style_section, open_by_default = True))
+    sections.append(
+        section(
+            "Primary style comparison",
+            style_section,
+            open_by_default = True,
+        )
+    )
 
     # -----------------------------------------------------------------
     # Error concentration and problematic documents
@@ -577,7 +822,13 @@ def build_corpus_report() -> None:
             lorenz_plot_block(style_bundle["lorenz_data"])
         )
     )
-    sections.append(section("Error concentration and problematic documents", concentration_section))
+    sections.append(
+        section(
+            "Error concentration and problematic documents",
+            concentration_section,
+            open_by_default = True,
+        )
+    )
 
     # -----------------------------------------------------------------
     # Error drivers by style
@@ -599,19 +850,19 @@ def build_corpus_report() -> None:
             write_csv_table(
                 f"{style}_char_confusions",
                 ["GT", "HTR", "Count", "% of style char confusions"],
-                char_rows
+                char_rows,
             )
         if bigram_rows:
             write_csv_table(
                 f"{style}_bigram_confusions",
                 ["GT bigram", "HTR output", "Count", "% of style bigram confusions"],
-                bigram_rows
+                bigram_rows,
             )
         if word_rows:
             write_csv_table(
                 f"{style}_word_confusions",
                 ["GT word", "HTR word", "Count", "% of style word confusions"],
-                word_rows
+                word_rows,
             )
 
         style_block = ""
@@ -649,7 +900,13 @@ def build_corpus_report() -> None:
         if style_block:
             driver_parts.append(subsection(f"Style block: {style}", style_block))
 
-    sections.append(section("Error drivers by style: character, bigram, and word", "".join(driver_parts)))
+    sections.append(
+        section(
+            "Error drivers by style: character, bigram, and word",
+            "".join(driver_parts),
+            open_by_default = True,
+        )
+    )
 
     # -----------------------------------------------------------------
     # Per-style document diagnostics
@@ -672,22 +929,22 @@ def build_corpus_report() -> None:
         write_csv_table(
             f"{style}_top_docs_by_edit_burden",
             ["Document", "Style", "Edits", "CER norm", "Logged issues", "Boundary % edits", "Drift"],
-            edit_rows
+            edit_rows,
         )
         write_csv_table(
             f"{style}_top_docs_by_issue_count",
             ["Document", "Style", "Logged issues", "S1", "S2", "S3", "Edits", "CER norm"],
-            issue_rows
+            issue_rows,
         )
         write_csv_table(
             f"{style}_top_docs_by_boundary_burden",
             ["Document", "Style", "Boundary % edits", "Boundary events", "Splits", "Merges", "Edits", "CER norm"],
-            boundary_rows
+            boundary_rows,
         )
         write_csv_table(
             f"{style}_drift_docs",
             ["Document", "Style", "S2 total", "Insert ratio", "Delete ratio", "Edits", "CER norm"],
-            drift_rows
+            drift_rows,
         )
 
         block_html = (
@@ -729,7 +986,25 @@ def build_corpus_report() -> None:
 
         per_style_parts.append(subsection(f"Per-style diagnostic block: {style}", block_html))
 
-    sections.append(section("Per-style document diagnostics", "".join(per_style_parts)))
+    sections.append(
+        section(
+            "Per-style document diagnostics",
+            "".join(per_style_parts),
+            open_by_default = True,
+        )
+    )
+
+    # -----------------------------------------------------------------
+    # Appendix
+    # -----------------------------------------------------------------
+
+    sections.append(
+        section(
+            "Appendix A. Calculation Definitions",
+            calculations_appendix(),
+            open_by_default = True,
+        )
+    )
 
     # -----------------------------------------------------------------
     # Write HTML
