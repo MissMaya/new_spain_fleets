@@ -6,7 +6,7 @@
 
 <meta charset="utf-8">
 
-<title>HTR Corpus Diagnostics – Analysis</title>
+<title>HTR Corpus Diagnostics - Analysis</title>
 
 <style>
 
@@ -100,7 +100,7 @@ color:#666;
 
 <div class="nav">
 
-<strong>Structure of analysis</strong>
+<strong>Sections</strong>
 
 <ul>
 
@@ -139,14 +139,20 @@ color:#666;
 
 <div class="prompt">
 
-Describe corpus size, structure, and composition by style.
+The descriptive analysis pipeline used as input a corpus of 2,413 GT and HTR pairs.
+1,946 pairs were selected through style-stratified random sampling to form a training corpus.
+The remaining 467 pairs were retained as a testing corpus. 
 
-Reference:
+The mean normalised CER across the training corpus after running the pipeline was calculated as 0.1667.
+This indicates that c.16-17% of characters differ between HTR output and GT on average.
+This number is in line with the 84% accuracy quoted when comparing the results from the CaligrafiaCRNN classifer
+used to produce the corpus HTRs to the corresponding GTs. 
 
-• number of documents  
-• distribution across styles  
-• differences in corpus geometry  
-• overall level of transcription divergence  
+The purpose of the descriptive analysis pipeline is to identify and analyse the structural characteristics of transcription divergence 
+rather than attempting to correct the corpus automatically. This separation between identification and correction aligns with digital humanities 
+principles of transparency and preservation of the documentary record.
+
+For machine learning purposes, this ensures that error signals are derived from the underlying transcription behaviour rather than from post-hoc transformations of the text.
 
 </div>
 
@@ -162,19 +168,24 @@ Reference:
 
 <h2>2. Distribution of issues across pipeline stages</h2>
 
-<div class="prompt">
-
-Explain relative contribution of S1, S2, and S3 issues.
-
-Clarify:
-
-• proportion of issues driven by GT–HTR mismatch  
-• extent to which preprocessing or orthographic rules explain error  
-
-</div>
+<p>
+The overall issue distribution clearly shows that transcription divergence is overwhelmingly concentrated in Stage 2, that is, in direct comparison between GT and HTR output. 
+Stage 2 accounts for 98.57% of all logged issues, whereas Stage 1 contributes only 0.15% and Stage 3 contributes 1.29%. 
+This indicates that the dominant source of noise in the corpus is not preprocessing inconsistency or orthographic variation, but the mismatch between the model transcription and the ground truth prepared by expert paleographers.
+</p>
 
 <p>
+The main challenge therefore is not cleaning formatting artefacts or normalising spelling conventions, but understanding where and how the HTR output diverges from the source-aligned transcription. 
+In other words, the primary signal available for model improvement lies in the structure of the GT-HTR divergences themselves.
+</p>
 
+<p>
+The issue distribution by style also shows that this divergence is not evenly distributed. 
+Procesal accounts for 49.54% of all logged issues while making up 45.89% of the training corpus. 
+Italica_cursiva accounts for 23.13% of issues while contributing 20.40% of training documents. 
+Contrast the above findings with the results for Encadenada, which is underrepresented in issue counts relative to corpus size. 
+Encadenada accounts for 23.66% of issues but makes up 29.75% of the the training corpus.
+These differences suggest that some styles generate more problematic training signals than others, even before more detailed metrics such as CER and drift are considered.
 </p>
 
 </div>
@@ -187,16 +198,24 @@ Clarify:
 
 <h3>CER by style</h3>
 
-<div class="prompt">
-
-Describe relative transcription difficulty across styles using mean and median CER.
-
-Comment on skew (mean vs median differences).
-
-</div>
+<p>
+Style comparison confirms substantial variation in transcription difficulty across styles. 
+Italica Cursiva has the highest mean CER (0.1852), followed by Encadenada (0.1725) and Procesal (0.1656).
+Redonda is markedly lower at 0.0424. 
+The results show that styles are not simply different calligraphic variants of comparable difficulty: they generate measurably different recognition conditions and therefore different error profiles.
+</p>
 
 <p>
+For Italica Cursiva, Procesal, and Redonda, the mean CER is higher than the median CER.
+This points to the existence of a subset of especially problematic documents that pulls the mean upwards. 
+We can conclude therefore that transcription difficulty within a style is not uniform. 
+A style may have a moderate or low average difficulty overall, while still containing a small but important subset of documents that generate disproportionately poor transcriptions.
+</p>
 
+<p>
+For downstream ML, we need to take onboard that CER alone does not indicate how stable the training signal is within a style. 
+A style with high internal variability may require more selective data use, more careful evaluation, or targeted inspection of difficult subsets. 
+It was already understood that some styles are harder to transcribe than others, but now we have evidence of clear transcription variability within styles and not just between. 
 </p>
 
 </div>
@@ -207,21 +226,22 @@ Comment on skew (mean vs median differences).
 
 <h2>4. Alignment drift</h2>
 
-<div class="prompt">
-
-Explain drift behaviour across styles.
-
-Clarify difference between:
-
-• local transcription error  
-• structural misalignment  
-
-Comment on implications for interpreting CER.
-
-</div>
+<p>
+The drift metric captures structural misalignment between GT and HTR by measuring the extent to which edits are dominated by insertions and deletions rather than substitutions. 
+A document is flagged as high drift when insertions and deletions together exceed 40% of character-level edits (threshold set arbitrarily and can be changed). 
+All styles show very high drift rates: Italica Cursiva has the highest at 99.24%, Procesal at 98.21%, Encadenada at 93.09%, and Redonda at 87.01%.
+</p>
 
 <p>
+This finding is important because it shows that many documents are not simply affected by local transcription mistakes. 
+Instead, the GT and HTR sequences are often globally hard to align. 
+In practical terms, this means that high CER does not necessarily reflect only character misrecognition. It may also reflect omission, insertion, or cumulative offset across a document, all of which distort the relationship between model output and target transcription.
+</p>
 
+<p>
+For downstream ML, we can summarise that documents with high drift are likely to provide unstable supervision, because the correspondence between input image and target text is already structurally compromised. 
+This suggests that high-drift documents should be isolated for review, pre-processed separately, or tested in filtered corpus variants before being used in fine-tuning. 
+The key point is that drift helps distinguish between data that is difficult because the script is visually complex and data that is difficult because the transcription alignment itself is unstable.
 </p>
 
 </div>
@@ -232,18 +252,23 @@ Comment on implications for interpreting CER.
 
 <h2>5. Concentration of error across documents</h2>
 
-<div class="prompt">
-
-Explain Lorenz curves and Gini coefficient.
-
-Identify whether a small subset of documents contributes disproportionately to total edits.
-
-Discuss presence of high-burden document subsets.
-
-</div>
+<p>
+The Lorenz curves and Gini coefficients again confirms that errors are unevenly distributed across documents rather than spread evenly through each style. 
+Redonda is the clearest example of this, with a Gini coefficient of 0.7193 with the top 10% of documents accounting for 56.37% of all edits in that style. 
+Procesal also shows substantial concentration, with a Gini of 0.5088 and the top 10% of documents accounting for 34.47% of edits. 
+Encadenada and Italica Cursiva are somewhat less concentrated, but still clearly non-uniform.
+</p>
 
 <p>
+This means that a relatively small subset of documents contributes a disproportionate share of character-level error. 
+These documents can be described as having "high-burden": a contribution to total edit counts that is much greater than that of the typical document in the same style. 
+Note that high burden is not the same as high drift: a document may be structurally misaligned but short, and therefore not dominate total edits, while a long document with only moderate CER may contribute very heavily to total error.
+</p>
 
+<p>
+For ML, this error concentration provides a basis for targeted rather than uniform intervention. 
+Instead of assuming that all documents within a style are equally useful for training, the descriptive analysis outputs highlight a small subset that is likely to dominate optimisation behaviour. 
+These findings create a strong rationale for testing corpus variants in which high-burden documents are excluded, down-weighted, or reviewed first, especially when preparing cleaner subsets for controlled fine-tuning experiments.
 </p>
 
 </div>
@@ -256,33 +281,43 @@ Discuss presence of high-burden document subsets.
 
 <h3>Edit composition</h3>
 
-<div class="prompt">
-
-Describe distribution of substitutions, insertions, and deletions.
-
-Explain implications of deletion-dominated error structure.
-
-</div>
+<p>
+At character level, the dominant edit pattern is deletion rather than substitution, especially in Italica Cursiva and Procesal. 
+Deletions account for 50.47% of edits in Italica Cursiva and 48.73% in Procesal. 
+Substitutions account for 42.31% and 46.10% in the above styles, respectively. 
+This finding indicates that the model is more likely to omit characters than to misidentify them.
+</p>
 
 <p>
+This is an important structural distinction. 
+A deletion-heavy profile suggests that characters are being dropped altogether. This could be because the script is compressed, ligatured, visually ambiguous, or difficult to align. 
+A substitution-heavy profile would suggest that the model is seeing characters but resolving them incorrectly. 
+Heavy deletions therefore point to a specific underlying failure mode.
+</p>
 
+<p>
+For downstream ML, deletion-dominated behaviour suggests that there could be value in testing approaches that are less tolerant of dropped characters, or ones that strengthen sequence continuity during prediction. 
+More broadly, the behaviour shows that the training data should not be treated as if all errors are functionally equivalent. 
+The model is not merely confusing one glyph for another: in many cases it is failing to emit the expected character at all.
 </p>
 
 
 <h3>Token boundary instability</h3>
 
-<div class="prompt">
-
-Explain split and merge behaviour.
-
-Discuss relationship to calligraphic style.
-
-Comment on observed boundary edit rates.
-
-</div>
+<p>
+Token boundary instability is low across the corpus. Split and merge rates remain below 2 per 1,000 GT tokens in every style, and boundary edits account for a very small proportion of total edits in most cases. 
+This indicates that overall divergence between GT and HTR is not primarily driven by disagreement over word boundaries.
+</p>
 
 <p>
+That said, the behaviour is still style-dependent. Procesal shows the highest split rate, while Redonda shows the highest merge rate. 
+These differences are small in absolute terms, but they remain informative because they point to systematic segmentation tendencies tied to script structure. 
+In other words, even where boundary instability is not a major driver of total error, it still reflects recurring stylistic behaviour in the way text is visually organised and recognised.
+</p>
 
+<p>
+For downstream ML, we can conclude that token boundary instability does not appear to be a major source of noise in this corpus so it should not be treated as a primary target for intervention. 
+However, the fact that split and merge behaviour varies by style suggests that segmentation consistency should still be monitored when evaluating style-specific models, especially in scripts where word separation is visually unstable.
 </p>
 
 </div>
@@ -295,49 +330,67 @@ Comment on observed boundary edit rates.
 
 <h3>Character substitutions</h3>
 
-<div class="prompt">
-
-Describe systematic character confusions by style.
-
-Highlight patterns linked to calligraphic form.
-
-</div>
+<p>
+Character-level substitutions identify the glyph confusions that recur most consistently within each style. 
+Identifying these confusions is valuable because it moves the analysis beyond overall accuracy to the internal structure of misrecognition. 
+We know from this analysis not just that a style is difficult but also which graphic distinctions are unstable for the model within a particular style.
+</p>
 
 <p>
+These substitutions may reflect visually similar forms, ambiguous stroke endings, compressed letter sequences, or graphically similar characters that are difficult to separate in connected writing. 
+Their importance lies not only in frequency but in how systematic they are: recurrent substitutions suggest that the model is making predictable errors in specific graphic environments rather than behaving randomly.
+</p>
 
+<p>
+For downstream ML, this provides a concrete basis for targeted error analysis. 
+Character-level confusion patterns can be used to identify where model refinement should focus, and to assess whether later fine-tuning reduces the same confusion classes across folds or only improves aggregate CER superficially.
 </p>
 
 
 <h3>Bigram substitutions</h3>
 
-<div class="prompt">
-
-Describe frequent bigram confusions.
-
-Explain relevance for stroke-level ambiguity.
-
-</div>
+<p>
+The bigram confusion tables are comparatively sparse and do not, at present, yield a strong standalone signal for downstream machine learning. 
+In several styles, the most frequent bigram substitutions occur only once. 
+Encadenada, for example, contains only two listed bigram confusions (<code>VZ → vz</code> and <code>FL → fl</code>), each with count 1.
+Procesal shows eight listed bigram confusions, all with count 1. 
+Italica Cursiva is only slightly denser, with <code>DE → de</code> occurring twice and the remaining listed patterns occurring once. 
+These findings indicate that bigram-level substitution structure is too sparse to support robust conclusions about recurrent sequence-level ambiguity in the present corpus.
+</p>
 
 <p>
+What the bigram tables do show is that some local two-character variation reflects case normalisation or minor graphemic instability rather than deeper structural failure. 
+In other words, the bigram results are more suggestive of isolated orthographic or casing variation than of a strong and repeated transition-level error pattern. 
+For that reason, they are best treated as a supplementary descriptive layer rather than as a primary basis for model adjustment.
+</p>
 
+<p>
+From an ML perspective, the bigram analysis is therefore of limited direct value at this stage. 
+The analysis may still be useful for qualitative inspection or for checking whether particular recurrent patterns become more stable after fine-tuning, but it is not currently one of the strongest signals in the report for informing data selection or training strategy.
 </p>
 
 
 <h3>Word-level confusions</h3>
 
-<div class="prompt">
-
-Summarise recurring lexical confusions.
-
-Note influence of abbreviation and orthographic variation.
-
-</div>
+<h3>Word-level confusions</h3>
 
 <p>
-
+The dominant patterns at word-level are primarily orthographic and graphemic rather than strongly lexical. 
+Across styles, recurrent confusions include forms such as <code>senor ↔ señor</code>, <code>anos ↔ años</code>, <code>ciudad ↔ çiudad</code>, <code>españa ↔ espana</code>, and <code>beneficio ↔ benefiçio</code>. 
+This analysis shows that a substantial share of repeated word-level mismatch arises from historically variable character realisations, diacritics, and cedilla/standardised-letter alternation, rather than from failure to recover wholly different lexical items.
 </p>
 
-</div>
+<p>
+This means that the word-level tables are useful primarily as evidence that recurring character-level instability accumulates into recognisable lexical variation. 
+They also help distinguish between genuine recognition failures and historically plausible orthographic variations.
+In that sense, the tables are valuable for interpretation, especially in a digital humanities context where preserving the distinction between transcription difference and normalisation difference is important.
+</p>
+
+<p>
+For downstream ML, the signal is still secondary. The word-level results do not currently point to a major lexical modelling problem requiring specific intervention. 
+Instead, they largely reinforce what is already visible in the character-level analysis: that recurrent confusion often involves cedilla, tilde, case, and related graphemic variation. 
+The main value of the word-level signals are diagnostic and interpretive, not as a primary driver of model redesign.
+</p>
 
 
 
@@ -345,19 +398,16 @@ Note influence of abbreviation and orthographic variation.
 
 <h2>8. Positional behaviour</h2>
 
-<div class="prompt">
-
-Summarise positional error distributions.
-
-Discuss whether errors cluster:
-
-• at particular line positions  
-• at particular character positions  
-
-</div>
+<p>
+Positional error analysis asks whether errors are concentrated in particular structural locations, either within a line or across document lines. This matters because not all transcription errors are evenly distributed through a page. A model may perform differently at the beginning or end of lines, or may degrade as documents progress if layout, density, or image quality changes.
+</p>
 
 <p>
+In interpretive terms, positional analysis helps distinguish global style difficulty from local structural effects. If errors cluster strongly in particular positions, then part of the observed difficulty may derive from layout regularities rather than from the script itself. Conversely, a more even distribution would suggest that transcription difficulty is structurally embedded throughout the writing.
+</p>
 
+<p>
+For downstream ML, positional behaviour is useful primarily as a validation signal. If positional clustering remains stable across evaluation folds, it suggests that the model is sensitive to recurring layout conditions and that this behaviour should be taken into account when interpreting performance gains.
 </p>
 
 </div>
@@ -368,24 +418,19 @@ Discuss whether errors cluster:
 
 <h2>9. Style-level observations</h2>
 
-<div class="prompt">
-
-Summarise distinctive structural characteristics of each style.
-
-Highlight differences in:
-
-• CER  
-• drift  
-• edit composition  
-• boundary behaviour  
-• error concentration  
-
-Explain what new information the pipeline contributes beyond prior expectations.
-
-</div>
+<p>
+The diagnostics show that style strongly influences observed error behaviour, but in a nuanced way.
+Italica Cursiva and Procesal are more difficult overall, as shown by higher CER and higher issue burden, but they are also characterised by high drift and deletion-heavy edits. 
+Redonda is much cleaner in terms of average CER but its error profile is highly concentrated in a small number of documents and it displays distinctive merge behaviour. 
+Encadenada occupies an intermediate position, with substantial difficulty but lower issue burden relative to its corpus share.
+</p>
 
 <p>
+We now know not only that some styles are more difficult to transcribe than others but now we can quantify how each style is difficult: whether errors are diffuse or concentrated, whether divergence is dominated by deletion or substitution, whether segmentation instability is present, and whether difficulty is structurally distributed across many documents or concentrated in a smaller problematic subset.
+</p>
 
+<p>
+For downstream ML, we see that we shouldn't just argue for style separation in principle, but that we need to provide a more granular account of internal error structure within each style so that refinement can take place inside the existing style-based modelling framework.
 </p>
 
 </div>
@@ -396,25 +441,30 @@ Explain what new information the pipeline contributes beyond prior expectations.
 
 <h2>10. Implications for downstream machine learning</h2>
 
-<div class="prompt">
-
-Summarise signals most relevant for model refinement.
-
-Possible themes:
-
-• high-drift documents  
-• high-burden documents  
-• clean subsets  
-• deletion-dominated errors  
-• token boundary instability  
-• style-specific error structure  
-
-Explain how diagnostics inform data selection and evaluation strategy.
-
-</div>
+<p>
+The strongest signals for downstream ML are high drift, high edit burden, deletion-dominated error structure, and the existence of relatively clean subsets within some styles. 
+High-drift documents are important because they indicate unstable correspondence between GT and HTR. These documents should be reviewed, filtered, or isolated in corpus variants so that fine-tuning can be tested on data with more reliable alignment.
+</p>
 
 <p>
+High-burden documents are a distinct signal. Because a relatively small subset of documents contributes disproportionately to total edits, corpus preparation does not need to proceed uniformly. 
+Instead, targeted review or controlled exclusion of those documents is likely to change the character of the training signal more efficiently than broad low-intensity cleaning across the whole corpus.
+</p>
 
+<p>
+The presence of cleaner subsets is also useful. Redonda, for example, contains a substantial proportion of documents with very low CER. 
+Such subsets can be used to create more stable evaluation baselines or to test whether cleaner training signal yields different error behaviour during fine-tuning.
+</p>
+
+<p>
+Deletion-heavy edit structure in Italica Cursiva and Procesal suggests that omission is a key failure mode. 
+This means that downstream experimentation should not focus only on reducing substitutions. It should also examine whether the model continues to suppress expected characters under sequence uncertainty. 
+Although token boundary instability is low overall, style-specific differences in split and merge behaviour remain worth monitoring because they provide a check on whether refinement improves only character accuracy or also preserves textual structure.
+</p>
+
+<p>
+The diagnostics provide structure to the preparation of cross-fold validation sets. 
+We can see that we need to construct the folds so that the major structural signals identified here, particularly drift, burden, and style-specific error profiles, can be tested for stability across splits. 
 </p>
 
 </div>
@@ -425,18 +475,18 @@ Explain how diagnostics inform data selection and evaluation strategy.
 
 <h2>11. Extensibility of the diagnostic approach</h2>
 
-<div class="prompt">
-
-Explain potential applicability to other HTR corpora.
-
-Clarify which measures are corpus-independent.
-
-Explain how approach could generalise across scripts.
-
-</div>
+<p>
+The diagnostic framework developed here is defined at the level of transcription structure rather than at the level of this corpus alone. 
+Measures such as CER, drift rate, edit burden, error concentration, and token boundary instability all describe the relationship between HTR output and GT in a way that is not tied to a specific corpus.
+</p>
 
 <p>
+The approach has potential applicability to other HTR corpora, particularly other historical corpora where transcription quality is heterogeneous and where the relationship between recognition output and target transcription is structurally unstable. 
+The methods are especially well suited to contexts in which the aim is not automatic correction but transparent diagnosis of where and how the transcription signal becomes unreliable.
+</p>
 
+<p>
+Note that we have yet to test applicability beyond out particular corpus. Nevertheless, the underlying logic is general: where HTR corpora contain uneven quality, structural divergence, and style-dependent recognition behaviour, the same diagnostic approach can be used to identify which parts of the corpus are likely to support stable model development and which require closer scrutiny.
 </p>
 
 </div>
@@ -447,16 +497,20 @@ Explain how approach could generalise across scripts.
 
 <h2>12. Summary of findings</h2>
 
-<div class="prompt">
-
-Concise synthesis of key findings.
-
-Short paragraph summarising methodological contribution.
-
-</div>
+<p>
+The report shows that transcription divergence in the corpus is driven overwhelmingly by GT-HTR mismatches rather than by preprocessing or orthographic irregularity. 
+Error is not evenly distributed across either styles or documents: some styles generate disproportionately high issue burdens, and within styles a relatively small number of documents account for a large share of total edits.
+</p>
 
 <p>
+The most important structural finding is that divergence is frequently driven by alignment instability and deletion-heavy behaviour rather than by isolated character substitutions. 
+This means that high CER often reflects broader sequence-level instability, not simply local misrecognition. 
+At the same time, the analysis identifies meaningful internal differences between styles in drift, concentration, token-boundary behaviour, and error composition.
+</p>
 
+<p>
+Methodologically, the pipeline contributes a reusable framework for describing how transcription error is structured and how that structure can inform downstream machine learning. 
+Rather than treating the corpus as uniformly noisy or uniformly reliable, it provides quantitative evidence for selective, style-aware, and document-aware preparation of training data.
 </p>
 
 </div>
@@ -465,17 +519,43 @@ Short paragraph summarising methodological contribution.
 
 <div class="section">
 
-<h2>13. TL;DR</h2>
+<h2>13. Key takeaways</h2>
 
-<div class="prompt">
+<ul>
 
-Provide concise bullet-point summary of main findings.
+<li>
+Errors are overwhelmingly driven by GT-HTR mismatches rather than by preprocessing or orthographic issues, confirming that transcription divergence is the dominant source of noise in the corpus.
+</li>
 
-</div>
+<li>
+Transcription difficulty varies substantially by style, with Italica Cursiva and Procesal generating higher CER and heavier issue burden than would be expected from corpus size alone.
+</li>
 
-<p>
+<li>
+High drift is widespread across all styles, indicating that many documents are structurally misaligned rather than affected only by local character mistakes.
+</li>
 
-</p>
+<li>
+Error is highly concentrated in a relatively small subset of documents, which means that targeted filtering, review, or reweighting of high-burden cases is likely to be more effective than uniform intervention.
+</li>
+
+<li>
+Deletion-heavy edit profiles suggest that omission is a key recognition failure mode, especially in Italica Cursiva and Procesal.
+</li>
+
+<li>
+Token boundary instability is low overall, but still reveals style-specific segmentation tendencies that may be useful as secondary evaluation signals.
+</li>
+
+<li>
+For downstream ML, the analysis identifies signals, particularly drift, burden, edit composition, and clean subsets, that can be tested systematically in a cross-fold validation set.
+</li>
+
+<li>
+The planned cross-fold validation set should be designed not only to measure model performance, but also to test whether these signals remain stable across corpus partitions and whether refinements informed by them generalise beyond a single train/test split.
+</li>
+
+</ul>
 
 </div>
 
