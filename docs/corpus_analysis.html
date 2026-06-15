@@ -189,7 +189,7 @@ This document interprets the results of the current corpus report. The analysis 
 <li><a href="#ecology">6. Recurring Error Patterns</a></li>
 <li><a href="#topology">7. Structural topology of instability</a></li>
 <li><a href="#governance">8. Operational governance and subset construction</a></li>
-<li><a href="#handoff">9. Exact handoff outputs</a></li>
+<li><a href="#handoff">9. Suggested document subsets</a></li>
 <li><a href="#critical">10. Critical cautions</a></li>
 </ul>
 </nav>
@@ -585,24 +585,24 @@ This document interprets the results of the current corpus report. The analysis 
 </section>
 
 <section id="handoff">
-<h2>9. Exact handoff outputs for fine-tuning and RAG</h2>
+<h2>9. Suggested document subsets for fine-tuning and RAG</h2>
 
-<h3>Fine-tuning handoff</h3>
+<h3>Fine-tuning subsets</h3>
 <table>
-<thead><tr><th>Output</th><th>Use</th><th>Why it matters</th></tr></thead>
+<thead><tr><th>Output</th><th>Use</th><th>Rationale</th></tr></thead>
 <tbody>
 <tr><td><code>operational_document_metrics</code></td><td>Primary sampling frame</td><td>Contains document-level CER, IDR, continuity, line delta, risk rank, and risk band.</td></tr>
 <tr><td><code>risk_band_summary_by_style</code></td><td>Balanced subset planning</td><td>Ensures each style contributes high/medium/low-risk examples.</td></tr>
-<tr><td><code>top_50_documents_by_risk</code></td><td>Manual review queue</td><td>Highlights catastrophic cases that may distort supervision.</td></tr>
+<tr><td><code>top_50_documents_by_risk</code></td><td>Manual review queue</td><td>Highlights catastrophic cases that may distort downstream processes.</td></tr>
 <tr><td><code>style_intelligence_overview</code></td><td>Style-specific training strategy</td><td>Shows clean-subset potential, edit composition, continuity, and drift behaviour.</td></tr>
-<tr><td><code>confusion_contexts</code></td><td>Targeted evaluation</td><td>Supports checking whether fine-tuning fixes recurrent confusions rather than simply lowering CER.</td></tr>
-<tr><td><code>topology profiles</code></td><td>Positional evaluation</td><td>Allows later models to be evaluated on line-end and late-document instability.</td></tr>
+<tr><td><code>confusion_contexts</code></td><td>Targeted evaluation</td><td>Supports the checking of whether fine-tuning fixes recurrent confusions rather than simply lowering CER.</td></tr>
+<tr><td><code>topology profiles</code></td><td>Positional evaluation</td><td>Allows later models to be evaluated on end of line and end of document instability.</td></tr>
 </tbody>
 </table>
 
-<h3>RAG handoff</h3>
+<h3>RAG subsets</h3>
 <table>
-<thead><tr><th>Output</th><th>Use</th><th>Why it matters</th></tr></thead>
+<thead><tr><th>Output</th><th>Use</th><th>Rationale</th></tr></thead>
 <tbody>
 <tr><td><code>rag_document_quality</code></td><td>Document-level confidence metadata</td><td>Allows retrieval systems to account for transcription reliability.</td></tr>
 <tr><td><code>rag_style_line_structure_profiles</code></td><td>Style-aware chunking policy</td><td>Encodes which styles are structurally stable or unstable.</td></tr>
@@ -617,14 +617,13 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>The central fine-tuning artefact is the style-stratified operational document table.</li>
 <li>The most useful immediate subset is: low-risk, high-continuity, low-IDR, stable-line documents within each style.</li>
-<li>The most useful review queue is: high-risk, low-continuity, high-IDR documents, especially in procesal and italica_cursiva.</li>
+<li>The most useful review subset is: high-risk, low-continuity, high-IDR documents, especially in Procesal and Italica Cursiva.</li>
 </ul>
 </div>
 
 <div class="box rag">
 <h3>RAG takeaway</h3>
 <ul>
-<li>The RAG pipeline should not scrape the HTML report. It should consume the exported CSV/JSON handoff files.</li>
 <li>Every indexed chunk should inherit document-level style, risk band, continuity, IDR, line-structure flag, and eventually chunk-level risk.</li>
 <li>Confusion inventories should be used to support fuzzy matching and historically aware query expansion.</li>
 </ul>
