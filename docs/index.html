@@ -212,14 +212,17 @@ a.button{
 <div class="wrap">
   <section class="hero">
     <div class="hero-main">
-      <span class="kicker">HTR corpus governance</span>
+      <span class="kicker">Unlocking 300 Years</span>
       <h1>NAOMI Corpus Diagnostics</h1>
       <p class="lede">
-        A corpus-scale diagnostic and risk-assessment framework for evaluating HTR transcription quality, identifying documents most likely to require expert review, and supporting the responsible use of transcriptions in downstream machine-learning and retrieval applications.
+        A diagnostic and risk-assessment framework for evaluating HTR transcription quality. The framework aims to provide a multi-dimensional view of 
+        transcription-quality as well as to score documents on quality  metrics, identifying subsets that provide particularly good downstream machine learning 
+        signals as well as those that should be subjected to expert review before being reintroduced into a machine learning pipeline and those that should be 
+        considered for outright removal based on their poor quality.
       </p>
       <div class="actions">
         <a class="button primary" href="corpus_report.html" target="_blank" rel="noopener">Open diagnostics report</a>
-        <a class="button secondary" href="corpus_analysis.html" target="_blank" rel="noopener">Open interpretive analysis</a>
+        <a class="button secondary" href="corpus_analysis.html" target="_blank" rel="noopener">Open report analysis</a>
       </div>
     </div>
 
@@ -227,8 +230,8 @@ a.button{
       <h2>Current package</h2>
       <ul class="meta-list">
         <li><span class="meta-label">Corpus</span><span class="meta-value">New Spain Fleets</span></li>
-        <li><span class="meta-label">Focus</span><span class="meta-value">Historical Spanish HTR</span></li>
-        <li><span class="meta-label">Report role</span><span class="meta-value">Diagnostics, review, and ML/RAG handoff</span></li>
+        <li><span class="meta-label">Project</span><span class="meta-value">Unlocking 300 Years</span></li>
+        <li><span class="meta-label">Report</span><span class="meta-value">Diagnostics and data governance</span></li>
         <li><span class="meta-label">Updated</span><span class="meta-value" id="last-updated">—</span></li>
       </ul>
     </aside>
@@ -275,15 +278,6 @@ a.button{
     <div class="step"><strong>Assess document risk</strong><span>Use the Risk Index to identify documents most likely to require review, correction, or further investigation.</span></div>
     <div class="step"><strong>Support downstream use</strong><span>Use diagnostic outputs and risk classifications to guide expert review, corpus preparation, and downstream ML or RAG workflows.</span></div>
   </div>
-
-  <div class="note">
-    The HTML report is designed for human interpretation and review. Automated workflows should consume the accompanying CSV and JSON exports rather than the report interface itself.
-  </div>
-
-  <div class="footer">
-    This package combines diagnostic evidence, risk assessment, and expert validation to support informed decisions about the use of HTR transcriptions. Final decisions remain a matter of scholarly judgement.
-  </div>
-</div>
 
 <script>
 const d = new Date(document.lastModified);
