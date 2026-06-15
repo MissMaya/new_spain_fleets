@@ -213,9 +213,9 @@ a.button{
   <section class="hero">
     <div class="hero-main">
       <span class="kicker">HTR corpus governance</span>
-      <h1>New Spain Fleets corpus diagnostics</h1>
+      <h1>NAOMI Corpus Diagnostics</h1>
       <p class="lede">
-        A style-aware evidence base for understanding HTR transcription quality, structural drift, line integrity, recurrent confusions, and downstream suitability for model fine-tuning and RAG.
+        A corpus-scale diagnostic and risk-assessment framework for evaluating HTR transcription quality, identifying documents most likely to require expert review, and supporting the responsible use of transcriptions in downstream machine-learning and retrieval applications.
       </p>
       <div class="actions">
         <a class="button primary" href="corpus_report.html" target="_blank" rel="noopener">Open diagnostics report</a>
@@ -228,7 +228,7 @@ a.button{
       <ul class="meta-list">
         <li><span class="meta-label">Corpus</span><span class="meta-value">New Spain Fleets</span></li>
         <li><span class="meta-label">Focus</span><span class="meta-value">Historical Spanish HTR</span></li>
-        <li><span class="meta-label">Report role</span><span class="meta-value">Human review and ML/RAG handoff</span></li>
+        <li><span class="meta-label">Report role</span><span class="meta-value">Diagnostics, review, and ML/RAG handoff</span></li>
         <li><span class="meta-label">Updated</span><span class="meta-value" id="last-updated">—</span></li>
       </ul>
     </aside>
@@ -236,19 +236,19 @@ a.button{
 
   <div class="grid">
     <div class="card">
-      <h3>Corpus shape</h3>
-      <p>Summarises style composition, document geometry, clean-subset potential, and uneven error concentration.</p>
+      <h3>Corpus Characteristics</h3>
+      <p>Summarises corpus composition, variation between calligraphic styles, transcription performance, and the distribution of errors across documents.</p>
       <div class="tagrow"><span class="tag blue">style-aware</span><span class="tag">corpus profile</span></div>
     </div>
     <div class="card">
-      <h3>Error ecology</h3>
-      <p>Examines recurrent character, bigram, and word-level confusions, including lexical contexts for repeated errors.</p>
-      <div class="tagrow"><span class="tag gold">confusions</span><span class="tag">diagnostic</span></div>
+      <h3>Error Patterns</h3>
+      <p>Identifies recurring transcription errors, including character confusions, orthographic variation, alignment problems, and common sources of recognition failure.</p>
+      <div class="tagrow"><span class="tag gold">error analysis</span><span class="tag">diagnostics</span></div>
     </div>
     <div class="card">
-      <h3>Operational risk</h3>
-      <p>Uses a deliberately narrow four-metric index: CER, IDR, continuity risk, and adjusted line delta.</p>
-      <div class="tagrow"><span class="tag green">fine-tuning</span><span class="tag">RAG</span></div>
+      <h3>Risk Assessment</h3>
+      <p>Combines complementary indicators of transcription reliability into a style-aware Risk Index that supports review prioritisation and downstream decision-making.</p>
+      <div class="tagrow"><span class="tag green">Risk Index</span><span class="tag">governance</span></div>
     </div>
   </div>
 
@@ -257,31 +257,31 @@ a.button{
     <article class="output-card">
       <span class="label">Evidence layer</span>
       <h3>Interactive diagnostics report</h3>
-      <p>Use this to inspect generated metrics, plots, risk bands, topology summaries, line-structure flags, and machine-readable handoff tables.</p>
+      <p>Provides access to corpus diagnostics, transcription-quality metrics, structural and alignment analyses, risk classifications, and machine-readable exports.</p>
       <a class="button primary" href="corpus_report.html" target="_blank" rel="noopener">Open report</a>
     </article>
     <article class="output-card">
       <span class="label">Interpretive layer</span>
       <h3>Companion analysis</h3>
-      <p>Use this to understand the significance of the generated outputs for corpus interpretation, fine-tuning strategy, and RAG configuration.</p>
+      <p>Explains the significance of the diagnostic outputs and highlights implications for corpus management, expert review, machine-learning workflows, and retrieval systems.</p>
       <a class="button secondary" href="corpus_analysis.html" target="_blank" rel="noopener">Open analysis</a>
     </article>
   </div>
 
   <h2 class="section-title">How to use this package</h2>
   <div class="workflow">
-    <div class="step"><strong>Inspect corpus shape</strong><span>Start with style composition, geometry, and clean-subset potential.</span></div>
-    <div class="step"><strong>Review error ecology</strong><span>Check recurrent confusions, drift patterns, and structural topology.</span></div>
-    <div class="step"><strong>Select subsets</strong><span>Use style-relative risk bands and exported tables to guide fine-tuning sets.</span></div>
-    <div class="step"><strong>Inform RAG</strong><span>Use line, topology, and quality handoff files to flag unstable retrieval material.</span></div>
+    <div class="step"><strong>Understand the corpus</strong><span>Review corpus composition, calligraphic styles, and variation in transcription performance across the collection.</span></div>
+    <div class="step"><strong>Identify error patterns</strong><span>Examine recurring transcription errors, alignment problems, and structural issues affecting transcription quality.</span></div>
+    <div class="step"><strong>Assess document risk</strong><span>Use the Risk Index to identify documents most likely to require review, correction, or further investigation.</span></div>
+    <div class="step"><strong>Support downstream use</strong><span>Use diagnostic outputs and risk classifications to guide expert review, corpus preparation, and downstream ML or RAG workflows.</span></div>
   </div>
 
   <div class="note">
-    The HTML report is intended for human evaluation. Downstream pipelines should consume the exported CSV/JSON artefacts rather than scrape the report page.
+    The HTML report is designed for human interpretation and review. Automated workflows should consume the accompanying CSV and JSON exports rather than the report interface itself.
   </div>
 
   <div class="footer">
-    This index links the diagnostic evidence layer and the interpretive analysis layer. It does not itself classify or exclude documents.
+    This package combines diagnostic evidence, risk assessment, and expert validation to support informed decisions about the use of HTR transcriptions. Final decisions remain a matter of scholarly judgement.
   </div>
 </div>
 
