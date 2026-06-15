@@ -298,37 +298,37 @@ This document interprets the results of the current corpus report. The analysis 
 
 <ul>
 <li><strong>Redonda</strong> is the clearest clean style: median CER <strong>0.012696</strong>, median continuity <strong>0.952298</strong>, and <strong>74.03%</strong> of documents below 5% CER.</li>
-<li><strong>Pseudo_redonda</strong> looks relatively clean at the median (CER <strong>0.066673</strong>) but has the highest P90 CER (<strong>0.488000</strong>), meaning it contains a severe high-error tail.</li>
-<li><strong>Procesal</strong> has a lower median CER (<strong>0.124396</strong>) than encadenada and italica_cursiva, but its P90 CER rises to <strong>0.372998</strong>, showing substantial internal variability.</li>
+<li><strong>Pseudo Redonda</strong> looks relatively clean at the median (CER <strong>0.066673</strong>) but has the highest P90 CER (<strong>0.488000</strong>), meaning it contains a significant high-error tail.</li>
+<li><strong>Procesal</strong> has a lower median CER (<strong>0.124396</strong>) than Encadenada and Italica Cursiva, but its P90 CER rises to <strong>0.372998</strong>, showing substantial internal variability.</li>
 <li><strong>Encadenada</strong> has the highest median CER (<strong>0.173805</strong>) and very low median continuity (<strong>0.143377</strong>), making it structurally less reliable than issue counts alone would imply.</li>
-<li><strong>Italica_cursiva</strong> has very little ultra-clean material: only <strong>0.50%</strong> of documents fall below 1% CER.</li>
+<li><strong>Italica Cursiva</strong> has very little ultra-clean material: only <strong>0.50%</strong> of documents fall below 1% CER.</li>
 </ul>
 
 <div class="box interpretation">
 <h3>Overall interpretation</h3>
 <ul>
-<li>The styles differ not just in average difficulty but in the shape of their risk distributions.</li>
-<li>Redonda is a clean but small style; pseudo_redonda has many usable documents but a dangerous high-risk tail; procesal is large and variable; encadenada has troubling continuity despite lower issue overweight; italica_cursiva has little ultra-clean material.</li>
-<li>The gap between median and P90 CER is operationally important. It shows that several styles contain both usable and highly unstable documents.</li>
+<li>The styles differ not just in average transcription difficulty but also in the shape of their risk distributions.</li>
+<li>Redonda is a clean but small style; Pseudo Redonda has many usable documents but a significant high-risk tail; Procesal is large and variable; Encadenada displays continuity issues; Italica Cursiva has little ultra-clean material.</li>
+<li>The gap between median and P90 CER is important. It shows that several styles contain both usable documents whilst also having a tail of highly unstable material.</li>
 </ul>
 </div>
 
 <div class="box ml">
 <h3>Fine-tuning takeaway</h3>
 <ul>
-<li>Use redonda as a clean benchmark pool, not as a proxy for the whole corpus.</li>
-<li>Use pseudo_redonda carefully: its median is promising, but the P90 CER of <strong>0.488</strong> means high-risk documents must be filtered.</li>
-<li>Procesal should be stratified internally because it is too large and variable to treat as a single quality group.</li>
-<li>Encadenada should not be assumed safe simply because it is underweight in logged issues; its median continuity of <strong>0.143377</strong> is a major warning signal.</li>
+<li>Use Redonda as a clean benchmark pool, not as a proxy for the whole corpus.</li>
+<li>Use Pseudo Redonda carefully: its median is promising, but the P90 CER of <strong>0.488</strong> means high-risk documents must be filtered.</li>
+<li>Consider stratifying Procesal because it is too large and variable to treat as a single, homogeneous group.</li>
+<li>Encadenada should not be assumed safe simply because it is underweight in logged issues: its median continuity of <strong>0.143377</strong> is low and should be considered as a warning signal.</li>
 </ul>
 </div>
 
 <div class="box rag">
 <h3>RAG takeaway</h3>
 <ul>
-<li>Redonda and low-risk pseudo_redonda are likely to produce cleaner retrieval chunks.</li>
+<li>Redonda and lower-risk Pseudo Redonda are likely to produce cleaner retrieval chunks.</li>
 <li>Encadenada requires special caution for RAG because low continuity suggests fragmented aligned structure, even where line structure appears stable.</li>
-<li>High-P90 styles should use stricter chunk validation because document-level medians hide catastrophic local regions.</li>
+<li>High-P90 styles should use stricter chunk validation because document-level medians may hide severely disrupted local regions.</li>
 </ul>
 </div>
 </section>
@@ -637,7 +637,7 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>The topology section currently uses issue events per document. It is highly informative, but should not be overinterpreted as direct semantic damage without further validation.</li>
 <li>Some recurrent confusions are historically plausible orthographic variants rather than straightforward model failures.</li>
-<li>The risk index is style-relative. A high-risk redonda document is high-risk within redonda, not necessarily worse than every procesal document in absolute terms.</li>
+<li>The risk index is style-relative. A high-risk Redonda document is high-risk within redonda, not necessarily worse than every Procesal document in absolute terms.</li>
 <li>Line-structure instability is rare, so it is best treated as an escalation signal rather than a major corpus-wide explanation.</li>
 <li>RAG implications remain partly prospective until the actual chunking strategy is known.</li>
 </ul>
@@ -646,7 +646,7 @@ This document interprets the results of the current corpus report. The analysis 
 <div class="box interpretation">
 <h3>Overall interpretation</h3>
 <ul>
-<li>The report’s strongest contribution is not simply that it provides more metrics than CER/WER.</li>
+<li>The report's strongest contribution is not simply that it provides more metrics than CER/WER.</li>
 <li>Its contribution is that it shows how historical HTR quality can be governed as a multi-dimensional, style-conditioned, structurally uneven data problem.</li>
 <li>This places the work closer to data-centric ML and corpus governance than to conventional OCR benchmarking alone.</li>
 </ul>
