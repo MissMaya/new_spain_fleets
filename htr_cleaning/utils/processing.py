@@ -20,7 +20,7 @@ Pipeline stages (run_step1.py, run_step2.py, run_step3.py) orchestrate execution
 """
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Any
 from collections import defaultdict
 
 from utils.logging import log_issue
@@ -74,6 +74,117 @@ def _offset_to_line_col(offsets: List[int], idx: int) -> tuple[int, int]:
     return line_idx + 1, col + 1
 
 
+def _line_lengths_from_offsets(text: str, offsets: List[int]) -> List[int]:
+    """
+    Return visible line lengths corresponding to _compute_line_offsets().
+
+    Newline characters are excluded so relative line-position describes
+    position within the transcribed line rather than within the linebreak.
+    """
+    lines = text.splitlines(keepends=True)
+    if not lines:
+        return [0]
+    return [len(line.rstrip("\r\n")) for line in lines]
+
+
+def _safe_ratio(numerator: float, denominator: float) -> float | None:
+    """
+    Return numerator / denominator, or None when denominator is not positive.
+    """
+    if denominator <= 0:
+        return None
+    return numerator / denominator
+
+
+def _position_bin(relative_position: float | None, bins: int = 10) -> str | None:
+    """
+    Convert a relative position in [0, 1] to a labelled position bin.
+
+    Examples for bins=10:
+        0.00 -> "0-10%"
+        0.35 -> "30-40%"
+        1.00 -> "90-100%"
+    """
+    if relative_position is None:
+        return None
+
+    rel = max(0.0, min(1.0, float(relative_position)))
+    idx = min(int(rel * bins), bins - 1)
+    lo = int(idx * (100 / bins))
+    hi = int((idx + 1) * (100 / bins))
+    return f"{lo}-{hi}%"
+
+
+def _add_position_metadata(
+    issue: Dict[str, Any],
+    text: str,
+    line_offsets: List[int],
+    line_lengths: List[int],
+    *,
+    position_basis: str,
+    bins: int = 10,
+) -> Dict[str, Any]:
+    """
+    Add relative line/document position metadata to an issue.
+
+    The current pipeline records Step 1, Step 2 and Step 3 issue positions
+    against the HTR text. For Step 2 deletions, the position should therefore
+    be interpreted as the HTR/alignment anchor where missing GT material is
+    detected rather than as the exact GT-side character coordinate.
+
+    Added fields:
+        - line_length
+        - document_length
+        - relative_line_position
+        - relative_document_position
+        - line_position_bin
+        - document_position_bin
+        - position_basis
+    """
+    document_length = len(text)
+
+    abs_start = int(issue.get("_abs_start", 0) or 0)
+    abs_end = int(issue.get("_abs_end", abs_start) or abs_start)
+
+    # Use the midpoint of the span where possible. For zero-length spans
+    # such as insertions/deletions, use the anchor position.
+    if abs_end > abs_start:
+        abs_mid = abs_start + ((abs_end - abs_start) / 2.0)
+    else:
+        abs_mid = float(abs_start)
+
+    line = int(issue.get("line", 1) or 1)
+    line_idx = max(0, min(line - 1, len(line_offsets) - 1))
+    line_length = line_lengths[line_idx] if line_idx < len(line_lengths) else 0
+
+    char_start = int(issue.get("char_start", 1) or 1)
+    char_end = int(issue.get("char_end", char_start) or char_start)
+
+    if char_end > char_start:
+        char_mid = char_start + ((char_end - char_start) / 2.0)
+    else:
+        char_mid = float(char_start)
+
+    # Convert 1-based character coordinate to a centre-ish relative coordinate.
+    relative_line_position = _safe_ratio(max(char_mid - 0.5, 0.0), line_length)
+    relative_document_position = _safe_ratio(max(abs_mid, 0.0), document_length)
+
+    if relative_line_position is not None:
+        relative_line_position = max(0.0, min(1.0, relative_line_position))
+    if relative_document_position is not None:
+        relative_document_position = max(0.0, min(1.0, relative_document_position))
+
+    issue["line_length"] = line_length
+    issue["document_length"] = document_length
+    issue["relative_line_position"] = relative_line_position
+    issue["relative_document_position"] = relative_document_position
+    issue["line_position_bin"] = _position_bin(relative_line_position, bins=bins)
+    issue["document_position_bin"] = _position_bin(relative_document_position, bins=bins)
+    issue["position_basis"] = position_basis
+
+    return issue
+
+
 # ----------------------------------------------------------------------
 # STEP 1
 # ----------------------------------------------------------------------
@@ -99,6 +210,7 @@ def process_step1_issues(
 
         text = read_text(htr_path)
         line_offsets = _compute_line_offsets(text)
+        line_lengths = _line_lengths_from_offsets(text, line_offsets)
 
         issues = []
 
@@ -129,6 +241,14 @@ def process_step1_issues(
                     "_abs_start": start,
                     "_abs_end": end,
                 }
+
+                _add_position_metadata(
+                    issue,
+                    text,
+                    line_offsets,
+                    line_lengths,
+                    position_basis="htr",
+                )
 
                 issues.append(issue)
 
@@ -178,6 +298,7 @@ def process_step2_issues(
         issues = align_and_tag(gt_text_full, htr_text_full, step1_spans)
 
         line_offsets = _compute_line_offsets(htr_text_full)
+        line_lengths = _line_lengths_from_offsets(htr_text_full, line_offsets)
 
         doc_issues = []
 
@@ -211,6 +332,22 @@ def process_step2_issues(
             issue["overlaps_step2"] = []
 
             issue["review"] = {"status": "unreviewed"}
+
+            position_basis = "htr_alignment_anchor"
+            if full_tag == "S2X":
+                position_basis = "htr_substitution_span"
+            elif full_tag == "S2I":
+                position_basis = "htr_insertion_span"
+            elif full_tag == "S2D":
+                position_basis = "htr_deletion_anchor"
+
+            _add_position_metadata(
+                issue,
+                htr_text_full,
+                line_offsets,
+                line_lengths,
+                position_basis=position_basis,
+            )
 
             doc_issues.append(issue)
 
@@ -296,6 +433,7 @@ def process_step3_issues(
         step2_spans = step2_spans_by_file.get(doc_id, [])
 
         line_offsets = _compute_line_offsets(htr_text)
+        line_lengths = _line_lengths_from_offsets(htr_text, line_offsets)
 
         doc_issues = []
 
@@ -345,6 +483,14 @@ def process_step3_issues(
                     "_abs_start": start,
                     "_abs_end": end,
                 }
+
+                _add_position_metadata(
+                    issue,
+                    htr_text,
+                    line_offsets,
+                    line_lengths,
+                    position_basis="htr",
+                )
 
                 doc_issues.append(issue)
 

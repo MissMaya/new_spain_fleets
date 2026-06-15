@@ -1,564 +1,673 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
 <meta charset="utf-8">
-
-<title>HTR Corpus Diagnostics - Analysis</title>
-
+<title>HTR Corpus Diagnostics — Findings-led Analysis</title>
 <style>
-
+:root{
+  --bg:#f6f7fb;
+  --panel:#ffffff;
+  --ink:#1f2430;
+  --muted:#5d6678;
+  --border:#dfe4ee;
+  --accent:#253b6e;
+  --interp-bg:#fff6dd;
+  --interp-border:#d69500;
+  --ml-bg:#eaf3ff;
+  --ml-border:#2f6fb3;
+  --rag-bg:#edf8f1;
+  --rag-border:#2d8a52;
+  --crit-bg:#fff0f0;
+  --crit-border:#bf3b3b;
+  --code:#f2f4f8;
+}
+*{box-sizing:border-box}
 body{
-font-family: system-ui, -apple-system, Segoe UI, Roboto;
-max-width: 950px;
-margin: 40px auto;
-line-height: 1.65;
-color: #222;
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  line-height:1.62;
 }
-
-h1,h2,h3{
-margin-top: 1.8em;
-margin-bottom: 0.4em;
+main{
+  max-width:1080px;
+  margin:34px auto 64px;
+  padding:0 22px;
 }
-
-.meta{
-background:#f4f6f8;
-padding:18px;
-border-radius:8px;
-margin-bottom:28px;
-border:1px solid #dfe3e8;
+header{
+  background:linear-gradient(135deg,#17284d,#304f8f);
+  color:#fff;
+  border-radius:20px;
+  padding:34px 38px;
+  box-shadow:0 12px 30px rgba(24,39,75,.18);
 }
-
-.section{
-margin-bottom:32px;
+header h1{margin:0 0 10px;font-size:2rem;line-height:1.2}
+header p{margin:0;color:#e7eefc;max-width:850px}
+.toplinks{
+  margin:18px 0 0;
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
 }
-
-.prompt{
-color:#666;
-font-size:0.95em;
-margin-top:6px;
-margin-bottom:12px;
+.toplinks a{
+  display:inline-block;
+  background:rgba(255,255,255,.14);
+  color:#fff;
+  border:1px solid rgba(255,255,255,.25);
+  border-radius:999px;
+  padding:7px 12px;
+  text-decoration:none;
+  font-size:.92rem;
 }
-
-.nav{
-background:#fafafa;
-padding:14px;
-border-radius:8px;
-border:1px solid #e3e6ea;
-margin-bottom:30px;
+.meta-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:12px;
+  margin:22px 0;
 }
-
-.nav ul{
-margin:6px 0 0 18px;
+.stat{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px 16px;
 }
-
-.note{
-background:#fff8e6;
-padding:12px;
-border-left:4px solid #e0a800;
-margin:16px 0;
+.stat .label{font-size:.82rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.stat .value{font-size:1.35rem;font-weight:750;margin-top:3px;color:var(--accent)}
+nav{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px 22px;
+  margin:22px 0;
 }
-
-.small{
-font-size:0.9em;
-color:#666;
+nav ul{
+  columns:2;
+  margin:8px 0 0 18px;
+  padding:0;
 }
-
+nav li{break-inside:avoid;margin:3px 0}
+a{color:#244f9e}
+section{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:26px 30px;
+  margin:22px 0;
+  box-shadow:0 4px 18px rgba(35,48,75,.05);
+}
+h2{margin:0 0 10px;font-size:1.45rem;color:#182a52}
+h3{margin:22px 0 8px;color:#293b63}
+ul{padding-left:22px}
+li{margin:6px 0}
+.kicker{
+  color:var(--muted);
+  font-size:.96rem;
+  margin-top:0;
+}
+.box{
+  border-left:6px solid;
+  border-radius:12px;
+  padding:15px 18px;
+  margin:18px 0;
+}
+.box h3{
+  margin:0 0 8px;
+  font-size:1rem;
+}
+.box ul{margin:6px 0 0 20px}
+.interpretation{background:var(--interp-bg);border-color:var(--interp-border)}
+.ml{background:var(--ml-bg);border-color:var(--ml-border)}
+.rag{background:var(--rag-bg);border-color:var(--rag-border)}
+.critical{background:var(--crit-bg);border-color:var(--crit-border)}
+table{
+  border-collapse:collapse;
+  width:100%;
+  margin:14px 0 18px;
+  font-size:.94rem;
+}
+th,td{
+  border:1px solid var(--border);
+  padding:8px 10px;
+  text-align:left;
+  vertical-align:top;
+}
+th{background:#f0f3f8;color:#26344f}
+code{
+  background:var(--code);
+  border:1px solid var(--border);
+  border-radius:5px;
+  padding:1px 5px;
+}
+.small{font-size:.9rem;color:var(--muted)}
+.badge{
+  display:inline-block;
+  border-radius:999px;
+  padding:2px 9px;
+  font-size:.82rem;
+  font-weight:700;
+}
+.badge-ml{background:var(--ml-bg);border:1px solid var(--ml-border)}
+.badge-rag{background:var(--rag-bg);border:1px solid var(--rag-border)}
+.badge-int{background:var(--interp-bg);border:1px solid var(--interp-border)}
+@media(max-width:760px){
+  nav ul{columns:1}
+  main{padding:0 14px}
+  header,section{padding:22px}
+}
 </style>
-
 </head>
-
 <body>
+<main>
 
-<p class="small">
-<a href="index.html">Back to index</a> |
+<header>
+<h1>Findings-led analysis of the HTR corpus diagnostics report</h1>
+<p>
+This document interprets the results of the current corpus report. It does not repeat the metric definitions; instead it identifies what the reported figures reveal about the corpus, and what should be handed forward to fine-tuning and RAG workflows.
+</p>
+<div class="toplinks">
+<a href="index.html">Back to index</a>
 <a href="corpus_report.html" target="_blank" rel="noopener">Open diagnostics report</a>
-</p>
+</div>
+</header>
 
-<h1>Analysis of HTR Corpus Diagnostics Report</h1>
-
-<div class="meta">
-
-<p><strong>Corpus:</strong> New Spain Fleets</p>
-
-<p><strong>Report file:</strong> corpus_report.html</p>
-
-<p><strong>Analysis version:</strong> v1.0</p>
-
-<p><strong>Date of analysis:</strong> [INSERT DATE]</p>
-
-<p><strong>Pipeline version:</strong> v1.0</p>
-
-<p><strong>Related report:</strong> 
-<a href="corpus_report.html">open corpus report</a>
-</p>
-
+<div class="meta-grid">
+  <div class="stat"><div class="label">Training documents</div><div class="value">2,068</div></div>
+  <div class="stat"><div class="label">Reference characters</div><div class="value">2.34M</div></div>
+  <div class="stat"><div class="label">Mean CER</div><div class="value">0.160</div></div>
+  <div class="stat"><div class="label">Median CER</div><div class="value">0.143</div></div>
+  <div class="stat"><div class="label">GT–HTR issues</div><div class="value">98.57%</div></div>
 </div>
 
-
-<div class="nav">
-
+<nav>
 <strong>Sections</strong>
+<ul>
+<li><a href="#overview">1. Overall corpus interpretation</a></li>
+<li><a href="#shape">2. Corpus shape and issue context</a></li>
+<li><a href="#style">3. Style behaviour and clean-subset potential</a></li>
+<li><a href="#line">4. Line-structure integrity</a></li>
+<li><a href="#concentration">5. Error concentration</a></li>
+<li><a href="#ecology">6. Error ecology and confusion contexts</a></li>
+<li><a href="#topology">7. Structural topology of instability</a></li>
+<li><a href="#governance">8. Operational governance and subset construction</a></li>
+<li><a href="#handoff">9. Exact handoff outputs</a></li>
+<li><a href="#critical">10. Critical cautions</a></li>
+</ul>
+</nav>
+
+<section id="overview">
+<h2>1. Overall corpus interpretation</h2>
+<p class="kicker">The report shows that the corpus is heterogeneous in size, style composition, transcription stability, and error behaviour.</p>
 
 <ul>
-
-<li>Overview of corpus</li>
-
-<li>Distribution of issues across pipeline stages</li>
-
-<li>Overall transcription divergence</li>
-
-<li>Alignment drift</li>
-
-<li>Error concentration across documents</li>
-
-<li>Structural error behaviour</li>
-
-<li>Character-level behaviour</li>
-
-<li>Positional behaviour</li>
-
-<li>Style-level observations</li>
-
-<li>Implications for downstream machine learning</li>
-
-<li>Extensibility of approach</li>
-
-<li>Summary of findings</li>
-
+<li>The training corpus contains <strong>2,068 documents</strong>, with <strong>489 held out as test documents</strong>.</li>
+<li>The training material contains <strong>2,335,229 normalised reference characters</strong>, <strong>567,449 tokens</strong>, and <strong>69,928 reference lines</strong>.</li>
+<li>The mean normalised CER is <strong>0.160429</strong>, while the median normalised CER is <strong>0.142685</strong>. The higher mean indicates that the corpus contains a high-error tail rather than a uniform error distribution.</li>
+<li>The mean WER is much higher at <strong>0.365346</strong>, confirming that character-level divergence compounds into substantial word-level disruption.</li>
+<li>Logged issue evidence is overwhelmingly concentrated in GT–HTR comparison: <strong>931,084 Stage 2 issues</strong>, representing <strong>98.57%</strong> of all logged issues. By contrast, Stage 1 surface anomalies account for only <strong>0.16%</strong>, and Stage 3 orthographic violations for <strong>1.27%</strong>.</li>
 </ul>
 
+<div class="box interpretation">
+<h3>Overall interpretation</h3>
+<ul>
+<li>The main problem is not surface cleaning. It is the structural relationship between HTR output and GT transcription.</li>
+<li>The difference between mean and median CER, together with the concentration statistics discussed later, shows that instability is unevenly distributed across documents.</li>
+<li>The corpus should therefore be treated as a mixed-quality, style-conditioned training environment, not as a single homogeneous dataset.</li>
+</ul>
 </div>
 
-
-<div class="section">
-
-<h2>1. Overview of the corpus</h2>
-
-<div class="prompt">
-
-The descriptive analysis pipeline used as input a corpus of 2,413 GT and HTR pairs.
-1,946 pairs were selected through style-stratified random sampling to form a training corpus.
-The remaining 467 pairs were retained as a testing corpus. 
-
-The mean normalised CER across the training corpus after running the pipeline was calculated as 0.1667.
-This indicates that c.16-17% of characters differ between HTR output and GT on average.
-
-The purpose of the descriptive analysis pipeline is to identify and analyse the structural characteristics of transcription divergence 
-rather than attempting to correct the corpus automatically. This separation between identification and correction aligns with digital humanities 
-principles of transparency and preservation of the documentary record.
-
-For machine learning purposes, this ensures that error signals are derived from the underlying transcription behaviour rather than from post-hoc transformations of the text.
-
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>The fine-tuning pipeline should not ingest the corpus uniformly.</li>
+<li>The first operational split should be by <strong>style</strong>, followed by risk band, continuity, IDR, and line-structure status.</li>
+<li>Low-risk documents should form the stable supervision baseline; high-risk documents should be isolated for review, stress-testing, or later-stage robustness training.</li>
+</ul>
 </div>
 
-<p>
-
-</p>
-
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>RAG quality will be limited less by formatting artefacts than by transcription divergence, missing content, and chunk instability.</li>
+<li>Document-level quality metadata should be attached to indexed material from the outset.</li>
+<li>The eventual chunking process should inherit style, risk, continuity, IDR, line-structure, and topology metadata.</li>
+</ul>
 </div>
+</section>
 
-
-
-<div class="section">
-
-<h2>2. Distribution of issues across pipeline stages</h2>
-
-<p>
-The overall issue distribution clearly shows that transcription divergence is overwhelmingly concentrated in Stage 2, that is, in direct comparison between GT and HTR output. 
-Stage 2 accounts for 98.57% of all logged issues, whereas Stage 1 contributes only 0.15% and Stage 3 contributes 1.29%. 
-This indicates that the dominant source of noise in the corpus is not preprocessing inconsistency or orthographic variation, but the mismatch between the model transcription and the ground truth prepared by expert paleographers.
-</p>
-
-<p>
-The main challenge therefore is not cleaning formatting artefacts or normalising spelling conventions, but understanding where and how the HTR output diverges from the source-aligned transcription. 
-In other words, the primary signal available for model improvement lies in the structure of the GT-HTR divergences themselves.
-</p>
-
-<p>
-The issue distribution by style also shows that this divergence is not evenly distributed. 
-Procesal accounts for 49.54% of all logged issues while making up 45.89% of the training corpus. 
-Italica_cursiva accounts for 23.13% of issues while contributing 20.40% of training documents. 
-Contrast the above findings with the results for Encadenada, which is underrepresented in issue counts relative to corpus size. 
-Encadenada accounts for 23.66% of issues but makes up 29.75% of the the training corpus.
-These differences suggest that some styles generate more problematic training signals than others, even before more detailed metrics such as CER and drift are considered.
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>3. Overall transcription divergence</h2>
-
-<h3>CER by style</h3>
-
-<p>
-Style comparison confirms substantial variation in transcription difficulty across styles. 
-Italica Cursiva has the highest mean CER (0.1852), followed by Encadenada (0.1725) and Procesal (0.1656).
-Redonda is markedly lower at 0.0424. 
-The results show that styles are not simply different calligraphic variants of comparable difficulty: they generate measurably different recognition conditions and therefore different error profiles.
-</p>
-
-<p>
-For Italica Cursiva, Procesal, and Redonda, the mean CER is higher than the median CER.
-This points to the existence of a subset of especially problematic documents that pulls the mean upwards. 
-We can conclude therefore that transcription difficulty within a style is not uniform. 
-A style may have a moderate or low average difficulty overall, while still containing a small but important subset of documents that generate disproportionately poor transcriptions.
-</p>
-
-<p>
-For downstream ML, we need to take onboard that CER alone does not indicate how stable the training signal is within a style. 
-A style with high internal variability may require more selective data use, more careful evaluation, or targeted inspection of difficult subsets. 
-It was already understood that some styles are harder to transcribe than others, but now we have evidence of clear transcription variability within styles and not just between. 
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>4. Alignment drift</h2>
-
-<p>
-The drift metric captures structural misalignment between GT and HTR by measuring the extent to which edits are dominated by insertions and deletions rather than substitutions. 
-A document is flagged as high drift when insertions and deletions together exceed 40% of character-level edits (threshold set arbitrarily and can be changed). 
-All styles show very high drift rates: Italica Cursiva has the highest at 99.24%, Procesal at 98.21%, Encadenada at 93.09%, and Redonda at 87.01%.
-</p>
-
-<p>
-This finding is important because it shows that many documents are not simply affected by local transcription mistakes. 
-Instead, the GT and HTR sequences are often globally hard to align. 
-In practical terms, this means that high CER does not necessarily reflect only character misrecognition. It may also reflect omission, insertion, or cumulative offset across a document, all of which distort the relationship between model output and target transcription.
-</p>
-
-<p>
-For downstream ML, we can summarise that documents with high drift are likely to provide unstable supervision, because the correspondence between input image and target text is already structurally compromised. 
-This suggests that high-drift documents should be isolated for review, pre-processed separately, or tested in filtered corpus variants before being used in fine-tuning. 
-The key point is that drift helps distinguish between data that is difficult because the script is visually complex and data that is difficult because the transcription alignment itself is unstable.
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>5. Concentration of error across documents</h2>
-
-<p>
-The Lorenz curves and Gini coefficients again confirms that errors are unevenly distributed across documents rather than spread evenly through each style. 
-Redonda is the clearest example of this, with a Gini coefficient of 0.7193 with the top 10% of documents accounting for 56.37% of all edits in that style. 
-Procesal also shows substantial concentration, with a Gini of 0.5088 and the top 10% of documents accounting for 34.47% of edits. 
-Encadenada and Italica Cursiva are somewhat less concentrated, but still clearly non-uniform.
-</p>
-
-<p>
-This means that a relatively small subset of documents contributes a disproportionate share of character-level error. 
-These documents can be described as having "high-burden": a contribution to total edit counts that is much greater than that of the typical document in the same style. 
-Note that high burden is not the same as high drift: a document may be structurally misaligned but short, and therefore not dominate total edits, while a long document with only moderate CER may contribute very heavily to total error.
-</p>
-
-<p>
-For ML, this error concentration provides a basis for targeted rather than uniform intervention. 
-Instead of assuming that all documents within a style are equally useful for training, the descriptive analysis outputs highlight a small subset that is likely to dominate optimisation behaviour. 
-These findings create a strong rationale for testing corpus variants in which high-burden documents are excluded, down-weighted, or reviewed first, especially when preparing cleaner subsets for controlled fine-tuning experiments.
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>6. Structural error behaviour</h2>
-
-<h3>Edit composition</h3>
-
-<p>
-At character level, the dominant edit pattern is deletion rather than substitution, especially in Italica Cursiva and Procesal. 
-Deletions account for 50.47% of edits in Italica Cursiva and 48.73% in Procesal. 
-Substitutions account for 42.31% and 46.10% in the above styles, respectively. 
-This finding indicates that the model is more likely to omit characters than to misidentify them.
-</p>
-
-<p>
-This is an important structural distinction. 
-A deletion-heavy profile suggests that characters are being dropped altogether. This could be because the script is compressed, ligatured, visually ambiguous, or difficult to align. 
-A substitution-heavy profile would suggest that the model is seeing characters but resolving them incorrectly. 
-Heavy deletions therefore point to a specific underlying failure mode.
-</p>
-
-<p>
-For downstream ML, deletion-dominated behaviour suggests that there could be value in testing approaches that are less tolerant of dropped characters, or ones that strengthen sequence continuity during prediction. 
-More broadly, the behaviour shows that the training data should not be treated as if all errors are functionally equivalent. 
-The model is not merely confusing one glyph for another: in many cases it is failing to emit the expected character at all.
-</p>
-
-
-<h3>Token boundary instability</h3>
-
-<p>
-Token boundary instability is low across the corpus. Split and merge rates remain below 2 per 1,000 GT tokens in every style, and boundary edits account for a very small proportion of total edits in most cases. 
-This indicates that overall divergence between GT and HTR is not primarily driven by disagreement over word boundaries.
-</p>
-
-<p>
-That said, the behaviour is still style-dependent. Procesal shows the highest split rate, while Redonda shows the highest merge rate. 
-These differences are small in absolute terms, but they remain informative because they point to systematic segmentation tendencies tied to script structure. 
-In other words, even where boundary instability is not a major driver of total error, it still reflects recurring stylistic behaviour in the way text is visually organised and recognised.
-</p>
-
-<p>
-For downstream ML, we can conclude that token boundary instability does not appear to be a major source of noise in this corpus so it should not be treated as a primary target for intervention. 
-However, the fact that split and merge behaviour varies by style suggests that segmentation consistency should still be monitored when evaluating style-specific models, especially in scripts where word separation is visually unstable.
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>7. Character-level behaviour</h2>
-
-<h3>Character substitutions</h3>
-
-<p>
-Character-level substitutions identify the glyph confusions that recur most consistently within each style. 
-Identifying these confusions is valuable because it moves the analysis beyond overall accuracy to the internal structure of misrecognition. 
-We know from this analysis not just that a style is difficult but also which graphic distinctions are unstable for the model within a particular style.
-</p>
-
-<p>
-These substitutions may reflect visually similar forms, ambiguous stroke endings, compressed letter sequences, or graphically similar characters that are difficult to separate in connected writing. 
-Their importance lies not only in frequency but in how systematic they are: recurrent substitutions suggest that the model is making predictable errors in specific graphic environments rather than behaving randomly.
-</p>
-
-<p>
-For downstream ML, this provides a concrete basis for targeted error analysis. 
-Character-level confusion patterns can be used to identify where model refinement should focus, and to assess whether later fine-tuning reduces the same confusion classes across folds or only improves aggregate CER superficially.
-</p>
-
-
-<h3>Bigram substitutions</h3>
-
-<p>
-The bigram confusion tables are comparatively sparse and do not, at present, yield a strong standalone signal for downstream machine learning. 
-In several styles, the most frequent bigram substitutions occur only once. 
-Encadenada, for example, contains only two listed bigram confusions (<code>VZ → vz</code> and <code>FL → fl</code>), each with count 1.
-Procesal shows eight listed bigram confusions, all with count 1. 
-Italica Cursiva is only slightly denser, with <code>DE → de</code> occurring twice and the remaining listed patterns occurring once. 
-These findings indicate that bigram-level substitution structure is too sparse to support robust conclusions about recurrent sequence-level ambiguity in the present corpus.
-</p>
-
-<p>
-What the bigram tables do show is that some local two-character variation reflects case normalisation or minor graphemic instability rather than deeper structural failure. 
-In other words, the bigram results are more suggestive of isolated orthographic or casing variation than of a strong and repeated transition-level error pattern. 
-For that reason, they are best treated as a supplementary descriptive layer rather than as a primary basis for model adjustment.
-</p>
-
-<p>
-From an ML perspective, the bigram analysis is therefore of limited direct value at this stage. 
-The analysis may still be useful for qualitative inspection or for checking whether particular recurrent patterns become more stable after fine-tuning, but it is not currently one of the strongest signals in the report for informing data selection or training strategy.
-</p>
-
-
-<h3>Word-level confusions</h3>
-
-<h3>Word-level confusions</h3>
-
-<p>
-The dominant patterns at word-level are primarily orthographic and graphemic rather than strongly lexical. 
-Across styles, recurrent confusions include forms such as <code>senor ↔ señor</code>, <code>anos ↔ años</code>, <code>ciudad ↔ çiudad</code>, <code>españa ↔ espana</code>, and <code>beneficio ↔ benefiçio</code>. 
-This analysis shows that a substantial share of repeated word-level mismatch arises from historically variable character realisations, diacritics, and cedilla/standardised-letter alternation, rather than from failure to recover wholly different lexical items.
-</p>
-
-<p>
-This means that the word-level tables are useful primarily as evidence that recurring character-level instability accumulates into recognisable lexical variation. 
-They also help distinguish between genuine recognition failures and historically plausible orthographic variations.
-In that sense, the tables are valuable for interpretation, especially in a digital humanities context where preserving the distinction between transcription difference and normalisation difference is important.
-</p>
-
-<p>
-For downstream ML, the signal is still secondary. The word-level results do not currently point to a major lexical modelling problem requiring specific intervention. 
-Instead, they largely reinforce what is already visible in the character-level analysis: that recurrent confusion often involves cedilla, tilde, case, and related graphemic variation. 
-The main value of the word-level signals are diagnostic and interpretive, not as a primary driver of model redesign.
-</p>
-
-
-
-<div class="section">
-
-<h2>8. Positional behaviour</h2>
-
-<p>
-Positional error analysis asks whether errors are concentrated in particular structural locations, either within a line or across document lines. This matters because not all transcription errors are evenly distributed through a page. A model may perform differently at the beginning or end of lines, or may degrade as documents progress if layout, density, or image quality changes.
-</p>
-
-<p>
-In interpretive terms, positional analysis helps distinguish global style difficulty from local structural effects. If errors cluster strongly in particular positions, then part of the observed difficulty may derive from layout regularities rather than from the script itself. Conversely, a more even distribution would suggest that transcription difficulty is structurally embedded throughout the writing.
-</p>
-
-<p>
-For downstream ML, positional behaviour is useful primarily as a validation signal. If positional clustering remains stable across evaluation folds, it suggests that the model is sensitive to recurring layout conditions and that this behaviour should be taken into account when interpreting performance gains.
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>9. Style-level observations</h2>
-
-<p>
-The diagnostics show that style strongly influences observed error behaviour, but in a nuanced way.
-Italica Cursiva and Procesal are more difficult overall, as shown by higher CER and higher issue burden, but they are also characterised by high drift and deletion-heavy edits. 
-Redonda is much cleaner in terms of average CER but its error profile is highly concentrated in a small number of documents and it displays distinctive merge behaviour. 
-Encadenada occupies an intermediate position, with substantial difficulty but lower issue burden relative to its corpus share.
-</p>
-
-<p>
-We now know not only that some styles are more difficult to transcribe than others but now we can quantify how each style is difficult: whether errors are diffuse or concentrated, whether divergence is dominated by deletion or substitution, whether segmentation instability is present, and whether difficulty is structurally distributed across many documents or concentrated in a smaller problematic subset.
-</p>
-
-<p>
-For downstream ML, we see that we shouldn't just argue for style separation in principle, but that we need to provide a more granular account of internal error structure within each style so that refinement can take place inside the existing style-based modelling framework.
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>10. Implications for downstream machine learning</h2>
-
-<p>
-The strongest signals for downstream ML are high drift, high edit burden, deletion-dominated error structure, and the existence of relatively clean subsets within some styles. 
-High-drift documents are important because they indicate unstable correspondence between GT and HTR. These documents should be reviewed, filtered, or isolated in corpus variants so that fine-tuning can be tested on data with more reliable alignment.
-</p>
-
-<p>
-High-burden documents are a distinct signal. Because a relatively small subset of documents contributes disproportionately to total edits, corpus preparation does not need to proceed uniformly. 
-Instead, targeted review or controlled exclusion of those documents is likely to change the character of the training signal more efficiently than broad low-intensity cleaning across the whole corpus.
-</p>
-
-<p>
-The presence of cleaner subsets is also useful. Redonda, for example, contains a substantial proportion of documents with very low CER. 
-Such subsets can be used to create more stable evaluation baselines or to test whether cleaner training signal yields different error behaviour during fine-tuning.
-</p>
-
-<p>
-Deletion-heavy edit structure in Italica Cursiva and Procesal suggests that omission is a key failure mode. 
-This means that downstream experimentation should not focus only on reducing substitutions. It should also examine whether the model continues to suppress expected characters under sequence uncertainty. 
-Although token boundary instability is low overall, style-specific differences in split and merge behaviour remain worth monitoring because they provide a check on whether refinement improves only character accuracy or also preserves textual structure.
-</p>
-
-<p>
-The diagnostics provide structure to the preparation of cross-fold validation sets. 
-We can see that we need to construct the folds so that the major structural signals identified here, particularly drift, burden, and style-specific error profiles, can be tested for stability across splits. 
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>11. Extensibility of the diagnostic approach</h2>
-
-<p>
-The diagnostic framework developed here is defined at the level of transcription structure rather than at the level of this corpus alone. 
-Measures such as CER, drift rate, edit burden, error concentration, and token boundary instability all describe the relationship between HTR output and GT in a way that is not tied to a specific corpus.
-</p>
-
-<p>
-The approach has potential applicability to other HTR corpora, particularly other historical corpora where transcription quality is heterogeneous and where the relationship between recognition output and target transcription is structurally unstable. 
-The methods are especially well suited to contexts in which the aim is not automatic correction but transparent diagnosis of where and how the transcription signal becomes unreliable.
-</p>
-
-<p>
-Note that we have yet to test applicability beyond out particular corpus. Nevertheless, the underlying logic is general: where HTR corpora contain uneven quality, structural divergence, and style-dependent recognition behaviour, the same diagnostic approach can be used to identify which parts of the corpus are likely to support stable model development and which require closer scrutiny.
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>12. Summary of findings</h2>
-
-<p>
-The report shows that transcription divergence in the corpus is driven overwhelmingly by GT-HTR mismatches rather than by preprocessing or orthographic irregularity. 
-Error is not evenly distributed across either styles or documents: some styles generate disproportionately high issue burdens, and within styles a relatively small number of documents account for a large share of total edits.
-</p>
-
-<p>
-The most important structural finding is that divergence is frequently driven by alignment instability and deletion-heavy behaviour rather than by isolated character substitutions. 
-This means that high CER often reflects broader sequence-level instability, not simply local misrecognition. 
-At the same time, the analysis identifies meaningful internal differences between styles in drift, concentration, token-boundary behaviour, and error composition.
-</p>
-
-<p>
-Methodologically, the pipeline contributes a reusable framework for describing how transcription error is structured and how that structure can inform downstream machine learning. 
-Rather than treating the corpus as uniformly noisy or uniformly reliable, it provides quantitative evidence for selective, style-aware, and document-aware preparation of training data.
-</p>
-
-</div>
-
-
-
-<div class="section">
-
-<h2>13. Key takeaways</h2>
+<section id="shape">
+<h2>2. Corpus shape and issue context</h2>
 
 <ul>
-
-<li>
-Errors are overwhelmingly driven by GT-HTR mismatches rather than by preprocessing or orthographic issues, confirming that transcription divergence is the dominant source of noise in the corpus.
+<li>The corpus is heavily weighted toward <strong>procesal</strong>, with <strong>893 documents</strong>, or <strong>43.18%</strong> of the training corpus.</li>
+<li><strong>Encadenada</strong> contributes <strong>579 documents</strong> (<strong>28.00%</strong>), while <strong>italica_cursiva</strong> contributes <strong>397 documents</strong> (<strong>19.20%</strong>).</li>
+<li>The two redonda-derived categories are much smaller: <strong>pseudo_redonda</strong> has <strong>122 documents</strong> (<strong>5.90%</strong>) and <strong>redonda</strong> has <strong>77 documents</strong> (<strong>3.72%</strong>).</li>
+<li>Procesal is not only the largest style by document count; it also contains <strong>1,332,584 characters</strong>, approximately <strong>45.9%</strong> of the style-level character total reported in the geometry table.</li>
+<li>Line geometry differs by style. Redonda has the longest median line length at <strong>56 characters</strong>, followed by italica_cursiva at <strong>52</strong>, procesal at <strong>46</strong>, pseudo_redonda at <strong>42</strong>, and encadenada at <strong>33</strong>.</li>
+<li>Issue burden is not proportional to document count:
+  <ul>
+  <li>Procesal accounts for <strong>43.18%</strong> of documents but <strong>47.23%</strong> of logged issues, an overweight of <strong>+4.05 percentage points</strong>.</li>
+  <li>Italica_cursiva accounts for <strong>19.20%</strong> of documents but <strong>22.10%</strong> of issues, an overweight of <strong>+2.90 percentage points</strong>.</li>
+  <li>Encadenada accounts for <strong>28.00%</strong> of documents but only <strong>22.56%</strong> of issues, an underweight of <strong>-5.43 percentage points</strong>.</li>
+  </ul>
 </li>
-
-<li>
-Transcription difficulty varies substantially by style, with Italica Cursiva and Procesal generating higher CER and heavier issue burden than would be expected from corpus size alone.
-</li>
-
-<li>
-High drift is widespread across all styles, indicating that many documents are structurally misaligned rather than affected only by local character mistakes.
-</li>
-
-<li>
-Error is highly concentrated in a relatively small subset of documents, which means that targeted filtering, review, or reweighting of high-burden cases is likely to be more effective than uniform intervention.
-</li>
-
-<li>
-Deletion-heavy edit profiles suggest that omission is a key recognition failure mode, especially in Italica Cursiva and Procesal.
-</li>
-
-<li>
-Token boundary instability is low overall, but still reveals style-specific segmentation tendencies that may be useful as secondary evaluation signals.
-</li>
-
-<li>
-For downstream ML, the analysis identifies signals, particularly drift, burden, edit composition, and clean subsets, that can be tested systematically in a cross-fold validation set.
-</li>
-
-<li>
-The planned cross-fold validation set should be designed not only to measure model performance, but also to test whether these signals remain stable across corpus partitions and whether refinements informed by them generalise beyond a single train/test split.
-</li>
-
 </ul>
 
+<div class="box interpretation">
+<h3>Overall interpretation</h3>
+<ul>
+<li>Style labels correspond to measurable differences in corpus shape, not merely palaeographic description.</li>
+<li>Procesal is the most consequential style operationally because it is both large and issue-heavy.</li>
+<li>Encadenada is large but relatively underweight in logged issues, meaning it may provide more stable material than its raw size alone would suggest.</li>
+<li>Redonda is small, but its longer line structure and low error profile make it a useful clean reference category.</li>
+</ul>
 </div>
 
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>Do not sample only by document count. Weighting should consider corpus share, character volume, issue burden, and style-specific stability.</li>
+<li>Procesal requires particular care: any model trained naively on the corpus will see a large amount of procesal material and a disproportionate share of its instability.</li>
+<li>Encadenada may be useful as a comparatively stable large-style pool, but this should be balanced against its lower continuity score in the style overview.</li>
+</ul>
+</div>
 
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>Style should be retained as document and chunk metadata in the vector store.</li>
+<li>Chunking policies may need to differ by style because line length and transcription stability differ materially.</li>
+<li>Redonda and pseudo_redonda may support cleaner retrieval pools; procesal and italica_cursiva require stronger quality gating.</li>
+</ul>
+</div>
+</section>
 
+<section id="style">
+<h2>3. Style behaviour and clean-subset potential</h2>
+
+<table>
+<thead><tr><th>Style</th><th>Median CER</th><th>P90 CER</th><th>Median IDR</th><th>Median continuity</th><th>Clean &lt;1%</th><th>Clean &lt;5%</th><th>Dominant edit signal</th></tr></thead>
+<tbody>
+<tr><td>encadenada</td><td>0.173805</td><td>0.308041</td><td>0.086327</td><td>0.143377</td><td>16.06%</td><td>23.14%</td><td>balanced substitution/deletion</td></tr>
+<tr><td>italica_cursiva</td><td>0.151899</td><td>0.337884</td><td>0.076027</td><td>0.446377</td><td>0.50%</td><td>19.14%</td><td>deletion-heavy</td></tr>
+<tr><td>procesal</td><td>0.124396</td><td>0.372998</td><td>0.055827</td><td>0.420690</td><td>7.61%</td><td>27.55%</td><td>near-balanced substitution/deletion</td></tr>
+<tr><td>pseudo_redonda</td><td>0.066673</td><td>0.488000</td><td>0.043073</td><td>0.801904</td><td>14.75%</td><td>45.08%</td><td>deletion-heavy tail</td></tr>
+<tr><td>redonda</td><td>0.012696</td><td>0.105735</td><td>0.007278</td><td>0.952298</td><td>48.05%</td><td>74.03%</td><td>mostly stable, with outliers</td></tr>
+</tbody>
+</table>
+
+<ul>
+<li><strong>Redonda</strong> is the clearest clean style: median CER <strong>0.012696</strong>, median continuity <strong>0.952298</strong>, and <strong>74.03%</strong> of documents below 5% CER.</li>
+<li><strong>Pseudo_redonda</strong> looks relatively clean at the median (CER <strong>0.066673</strong>) but has the highest P90 CER (<strong>0.488000</strong>), meaning it contains a severe high-error tail.</li>
+<li><strong>Procesal</strong> has a lower median CER (<strong>0.124396</strong>) than encadenada and italica_cursiva, but its P90 CER rises to <strong>0.372998</strong>, showing substantial internal variability.</li>
+<li><strong>Encadenada</strong> has the highest median CER (<strong>0.173805</strong>) and very low median continuity (<strong>0.143377</strong>), making it structurally less reliable than issue counts alone would imply.</li>
+<li><strong>Italica_cursiva</strong> has very little ultra-clean material: only <strong>0.50%</strong> of documents fall below 1% CER.</li>
+</ul>
+
+<div class="box interpretation">
+<h3>Overall interpretation</h3>
+<ul>
+<li>The styles differ not just in average difficulty but in the shape of their risk distributions.</li>
+<li>Redonda is a clean but small style; pseudo_redonda has many usable documents but a dangerous high-risk tail; procesal is large and variable; encadenada has troubling continuity despite lower issue overweight; italica_cursiva has little ultra-clean material.</li>
+<li>The gap between median and P90 CER is operationally important. It shows that several styles contain both usable and highly unstable documents.</li>
+</ul>
+</div>
+
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>Use redonda as a clean benchmark pool, not as a proxy for the whole corpus.</li>
+<li>Use pseudo_redonda carefully: its median is promising, but the P90 CER of <strong>0.488</strong> means high-risk documents must be filtered.</li>
+<li>Procesal should be stratified internally because it is too large and variable to treat as a single quality group.</li>
+<li>Encadenada should not be assumed safe simply because it is underweight in logged issues; its median continuity of <strong>0.143377</strong> is a major warning signal.</li>
+</ul>
+</div>
+
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>Redonda and low-risk pseudo_redonda are likely to produce cleaner retrieval chunks.</li>
+<li>Encadenada requires special caution for RAG because low continuity suggests fragmented aligned structure, even where line structure appears stable.</li>
+<li>High-P90 styles should use stricter chunk validation because document-level medians hide catastrophic local regions.</li>
+</ul>
+</div>
+</section>
+
+<section id="line">
+<h2>4. Line-structure integrity and segmentation risk</h2>
+
+<ul>
+<li>Line-structure integrity is generally strong across the corpus: each style has at least <strong>99.18%</strong> stable adjusted line structure.</li>
+<li>Redonda is perfectly stable on this measure: <strong>100.00%</strong> stable line structure and <strong>0.00%</strong> severe line instability.</li>
+<li>Procesal has the highest unmatched HTR blank incidence at <strong>1.01%</strong> of documents, followed by italica_cursiva at <strong>0.76%</strong> and encadenada at <strong>0.69%</strong>.</li>
+<li>Severe line instability is rare but present in encadenada (<strong>0.17%</strong>) and procesal (<strong>0.34%</strong>).</li>
+<li>Moderate instability appears in pseudo_redonda (<strong>0.82%</strong>), italica_cursiva (<strong>0.50%</strong>), procesal (<strong>0.34%</strong>), and encadenada (<strong>0.17%</strong>).</li>
+</ul>
+
+<div class="box interpretation">
+<h3>Overall interpretation</h3>
+<ul>
+<li>The corpus is not broadly line-structure broken. That is important: most instability is not caused by simple line-count mismatch.</li>
+<li>However, the small number of line-structure failures is operationally significant because such failures can disproportionately damage training alignment and chunk boundaries.</li>
+<li>Line-structure risk should therefore be used as an escalation flag rather than as a dominant explanatory metric.</li>
+</ul>
+</div>
+
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>Documents with moderate or severe line instability should be reviewed or excluded from the cleanest supervision pools.</li>
+<li>Because most documents have stable line structure, adjusted line delta should remain a low-weight component of the index rather than a dominant score.</li>
+<li>The combination <code>high CER + high IDR + low continuity + line instability</code> should be treated as a strong exclusion or review signal.</li>
+</ul>
+</div>
+
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>Line-structure failures are rare but highly relevant for chunking.</li>
+<li>Documents flagged as <code>review_line_structure</code> or <code>monitor_line_structure</code> should not be chunked blindly.</li>
+<li>For RAG, line-structure metadata should be attached to chunk records so that retrieval confidence can be reduced for structurally unstable source documents.</li>
+</ul>
+</div>
+</section>
+
+<section id="concentration">
+<h2>5. Error concentration and high-burden subsets</h2>
+
+<table>
+<thead><tr><th>Style</th><th>Total edits</th><th>Gini</th><th>Top 10% docs share</th><th>Top 5 docs share</th></tr></thead>
+<tbody>
+<tr><td>encadenada</td><td>90,583</td><td>0.4397</td><td>24.02%</td><td>2.84%</td></tr>
+<tr><td>italica_cursiva</td><td>71,078</td><td>0.4323</td><td>29.45%</td><td>6.60%</td></tr>
+<tr><td>procesal</td><td>149,703</td><td>0.4968</td><td>32.89%</td><td>3.33%</td></tr>
+<tr><td>pseudo_redonda</td><td>13,689</td><td>0.6291</td><td>41.52%</td><td>21.00%</td></tr>
+<tr><td>redonda</td><td>4,057</td><td>0.7193</td><td>56.37%</td><td>46.41%</td></tr>
+</tbody>
+</table>
+
+<ul>
+<li>Procesal contributes the largest absolute edit burden: <strong>149,703 edits</strong>.</li>
+<li>Redonda has the smallest total edit burden (<strong>4,057 edits</strong>) but the highest concentration: Gini <strong>0.7193</strong>, with the top 10% of documents accounting for <strong>56.37%</strong> of edits.</li>
+<li>Pseudo_redonda also has strong concentration: Gini <strong>0.6291</strong>, with the top 10% accounting for <strong>41.52%</strong> of edits.</li>
+<li>Procesal combines large scale and substantial concentration: Gini <strong>0.4968</strong>, with the top 10% contributing <strong>32.89%</strong> of edits.</li>
+</ul>
+
+<div class="box interpretation">
+<h3>Overall interpretation</h3>
+<ul>
+<li>Error is not evenly distributed across documents.</li>
+<li>Small styles can look clean overall while still containing a few documents that dominate their error burden.</li>
+<li>Redonda is the clearest example: it is clean in median terms, but its top 5 documents account for <strong>46.41%</strong> of edits in that style.</li>
+</ul>
+</div>
+
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>High-burden documents should be explicitly tested as exclusion, down-weighting, or review candidates.</li>
+<li>Redonda should not be treated as uniformly clean; a small number of redonda outliers can materially distort training or evaluation.</li>
+<li>Procesal high-burden documents deserve priority review because they combine high absolute error volume with large corpus share.</li>
+</ul>
+</div>
+
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>High-burden documents should receive lower retrieval confidence until manually reviewed or chunk-validated.</li>
+<li>For small clean styles, outlier detection is especially important: a few bad documents can dominate the retrieval-risk profile of the whole style.</li>
+<li>Error concentration tables should feed directly into the RAG exclusion or warning list.</li>
+</ul>
+</div>
+</section>
+
+<section id="ecology">
+<h2>6. Error ecology and recurrent confusion contexts</h2>
+
+<ul>
+<li>Character confusions are dominated in many styles by case and graphemic variants:
+  <ul>
+  <li>Encadenada: <code>L→l</code> occurs <strong>239</strong> times (<strong>20.43%</strong> of style character confusions), followed by <code>E→e</code> (<strong>185</strong>) and <code>D→d</code> (<strong>108</strong>).</li>
+  <li>Italica_cursiva: <code>L→l</code> (<strong>136</strong>), <code>S→s</code> (<strong>133</strong>), and <code>Y→y</code> (<strong>130</strong>) dominate.</li>
+  <li>Procesal: <code>E→e</code> is especially prominent with <strong>445</strong> instances (<strong>21.67%</strong>), followed by <code>L→l</code> (<strong>307</strong>).</li>
+  <li>Redonda shows a more historically meaningful pattern: <code>c→ç</code> occurs <strong>16</strong> times (<strong>12.70%</strong>), alongside <code>e→E</code> and <code>L→l</code>.</li>
+  </ul>
+</li>
+<li>Word-level confusions often involve historically meaningful orthographic variation:
+  <ul>
+  <li>Encadenada includes <code>senor→señor</code> and <code>año→ano</code> at <strong>6</strong> instances each.</li>
+  <li>Italica_cursiva includes <code>çiudad→ciudad</code> (<strong>6</strong>) and <code>seisçientos→seiscientos</code> (<strong>5</strong>).</li>
+  <li>Procesal includes <code>ciudad→çiudad</code> (<strong>12</strong>), <code>anos→años</code> (<strong>8</strong>), and <code>senor→señor</code> (<strong>8</strong>).</li>
+  <li>Redonda includes <code>principal→prinçipal</code> (<strong>3</strong>) and related cedilla forms.</li>
+  </ul>
+</li>
+<li>Bigram evidence is relatively sparse compared with character and word contexts, so it should be treated as supplementary rather than primary.</li>
+</ul>
+
+<div class="box interpretation">
+<h3>Overall interpretation</h3>
+<ul>
+<li>The confusion evidence shows structured error behaviour rather than random noise.</li>
+<li>Many recurrent errors involve historical orthography, case, cedilla, and tilde behaviour; these are not all equivalent to semantically destructive corruption.</li>
+<li>The report begins to distinguish between surface graphemic instability and meaning-bearing lexical corruption.</li>
+</ul>
+</div>
+
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>Confusion inventories should become evaluation targets: a fine-tuned model should be checked against the same recurrent confusion classes, not only against aggregate CER.</li>
+<li>Case-only confusions may not require the same treatment as omitted or substituted lexical content.</li>
+<li>Deletion-heavy behaviour remains a higher priority than sparse bigram confusions for training intervention.</li>
+</ul>
+</div>
+
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>Confusion contexts can feed fuzzy retrieval and query expansion dictionaries.</li>
+<li>Historical variants such as <code>senor/señor</code>, <code>ciudad/çiudad</code>, and <code>anos/años</code> should be considered retrieval equivalence candidates.</li>
+<li>Entity-bearing or place-name confusions should be prioritised for RAG because they directly affect recall.</li>
+</ul>
+</div>
+</section>
+
+<section id="topology">
+<h2>7. Structural topology of transcription instability</h2>
+
+<table>
+<thead><tr><th>Operation</th><th>Consistent peak pattern</th><th>Examples from report</th></tr></thead>
+<tbody>
+<tr><td>Substitution</td><td>Generally early-document and often early-line</td><td>Encadenada, italica_cursiva, and procesal substitution peaks occur at <strong>0–10%</strong> document position.</td></tr>
+<tr><td>Deletion</td><td>Strongly line-end and document-end concentrated</td><td>All five styles peak at <strong>90–100%</strong> line position and <strong>90–100%</strong> document position for deletions.</td></tr>
+<tr><td>Insertion</td><td>Often line-start but later-document concentrated</td><td>Most styles peak at <strong>0–10%</strong> line position; document peaks fall around <strong>60–90%</strong>.</td></tr>
+</tbody>
+</table>
+
+<ul>
+<li>Deletion topology is the strongest signal in this section:
+  <ul>
+  <li>Encadenada deletion peak: <strong>90–100%</strong> line position, <strong>51.5389 events/doc</strong>; <strong>90–100%</strong> document position, <strong>163.0639 events/doc</strong>.</li>
+  <li>Italica_cursiva deletion peak: <strong>90–100%</strong> line position, <strong>99.9194 events/doc</strong>; <strong>90–100%</strong> document position, <strong>240.9547 events/doc</strong>.</li>
+  <li>Procesal deletion peak: <strong>90–100%</strong> line position, <strong>91.8611 events/doc</strong>; <strong>90–100%</strong> document position, <strong>231.9071 events/doc</strong>.</li>
+  <li>Redonda deletion peak: <strong>90–100%</strong> line position, <strong>91.2078 events/doc</strong>; <strong>90–100%</strong> document position, <strong>198.1169 events/doc</strong>.</li>
+  </ul>
+</li>
+<li>Insertion peaks are typically at the beginning of lines but later in documents:
+  <ul>
+  <li>Procesal insertion peak: <strong>0–10%</strong> line position and <strong>70–80%</strong> document position.</li>
+  <li>Redonda insertion peak: <strong>0–10%</strong> line position and <strong>80–90%</strong> document position.</li>
+  </ul>
+</li>
+<li>Substitution events are much less dense than deletion and insertion events in the topology summary.</li>
+</ul>
+
+<div class="box interpretation">
+<h3>Overall interpretation</h3>
+<ul>
+<li>The topology section is one of the strongest pieces of evidence that transcription error is structurally organised.</li>
+<li>The repeated deletion peak at <strong>90–100%</strong> of both line and document position suggests a systematic end-region failure pattern, not random character-level noise.</li>
+<li>The combination of late-document deletions and line-start insertions is consistent with drift propagation: once sequence alignment becomes unstable, later regions absorb cascading mismatch.</li>
+</ul>
+</div>
+
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>Future model evaluation should test whether fine-tuning reduces late-document and line-end deletion concentration.</li>
+<li>Topology should be used as an evaluation diagnostic, not as part of the main risk index.</li>
+<li>Training subsets should preserve some topology diversity so that the model is not trained only on easy line-centre regions.</li>
+</ul>
+</div>
+
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>Chunks drawn from late-document regions should be treated with caution, especially in styles where deletion peaks are extremely high.</li>
+<li>Chunk overlap may need to increase near unstable document regions, particularly toward document endings.</li>
+<li>The RAG pipeline should consume topology profiles as metadata, allowing retrieval confidence to account for known positional instability.</li>
+</ul>
+</div>
+</section>
+
+<section id="governance">
+<h2>8. Operational governance and subset construction</h2>
+
+<ul>
+<li>The risk index is intentionally narrow and uses only four metrics:
+  <ul>
+  <li><strong>CER</strong>, weight <strong>0.35</strong>;</li>
+  <li><strong>IDR</strong>, weight <strong>0.30</strong>;</li>
+  <li><strong>continuity risk</strong>, weight <strong>0.25</strong>;</li>
+  <li><strong>adjusted line delta</strong>, weight <strong>0.10</strong>.</li>
+  </ul>
+</li>
+<li>Risk bands are assigned within style, producing approximately one third high, medium, and low risk documents per style:
+  <ul>
+  <li>Encadenada: <strong>193 high</strong>, <strong>193 medium</strong>, <strong>193 low</strong>.</li>
+  <li>Procesal: <strong>298 high</strong>, <strong>298 medium</strong>, <strong>297 low</strong>.</li>
+  <li>Redonda: <strong>26 high</strong>, <strong>26 medium</strong>, <strong>25 low</strong>.</li>
+  </ul>
+</li>
+<li>The highest-risk documents show that risk is often driven by extreme CER, IDR, and low continuity even when line structure remains stable.</li>
+<li>For example, the top redonda-risk document has CER <strong>0.372093</strong>, IDR <strong>0.186047</strong>, and continuity <strong>0.000000</strong>, despite stable line structure.</li>
+</ul>
+
+<div class="box interpretation">
+<h3>Overall interpretation</h3>
+<ul>
+<li>The index is not a complete description of document quality. It is an operational governance instrument.</li>
+<li>Its strength is that it combines overall error, drift, coherence, and segmentation risk without absorbing every diagnostic signal.</li>
+<li>This makes the index more defensible than a broad composite that includes every available metric.</li>
+</ul>
+</div>
+
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>Use low-risk documents as the cleanest supervision pool within each style.</li>
+<li>Use medium-risk documents for robustness and curriculum-learning experiments.</li>
+<li>Use high-risk documents for review, exclusion testing, and stress-testing, not for initial stable fine-tuning.</li>
+<li>Because risk is assigned within style, every style contributes candidate low-risk and high-risk material.</li>
+</ul>
+</div>
+
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>High-risk documents should not be indexed without warning metadata or chunk-level verification.</li>
+<li>Risk score should become a document-level retrieval confidence prior.</li>
+<li>Low-risk documents can seed the first reliable retrieval corpus while high-risk material is reviewed.</li>
+</ul>
+</div>
+</section>
+
+<section id="handoff">
+<h2>9. Exact handoff outputs for fine-tuning and RAG</h2>
+
+<h3>Fine-tuning handoff</h3>
+<table>
+<thead><tr><th>Output</th><th>Use</th><th>Why it matters</th></tr></thead>
+<tbody>
+<tr><td><code>operational_document_metrics</code></td><td>Primary sampling frame</td><td>Contains document-level CER, IDR, continuity, line delta, risk rank, and risk band.</td></tr>
+<tr><td><code>risk_band_summary_by_style</code></td><td>Balanced subset planning</td><td>Ensures each style contributes high/medium/low-risk examples.</td></tr>
+<tr><td><code>top_50_documents_by_risk</code></td><td>Manual review queue</td><td>Highlights catastrophic cases that may distort supervision.</td></tr>
+<tr><td><code>style_intelligence_overview</code></td><td>Style-specific training strategy</td><td>Shows clean-subset potential, edit composition, continuity, and drift behaviour.</td></tr>
+<tr><td><code>confusion_contexts</code></td><td>Targeted evaluation</td><td>Supports checking whether fine-tuning fixes recurrent confusions rather than simply lowering CER.</td></tr>
+<tr><td><code>topology profiles</code></td><td>Positional evaluation</td><td>Allows later models to be evaluated on line-end and late-document instability.</td></tr>
+</tbody>
+</table>
+
+<h3>RAG handoff</h3>
+<table>
+<thead><tr><th>Output</th><th>Use</th><th>Why it matters</th></tr></thead>
+<tbody>
+<tr><td><code>rag_document_quality</code></td><td>Document-level confidence metadata</td><td>Allows retrieval systems to account for transcription reliability.</td></tr>
+<tr><td><code>rag_style_line_structure_profiles</code></td><td>Style-aware chunking policy</td><td>Encodes which styles are structurally stable or unstable.</td></tr>
+<tr><td><code>rag_topology_profiles</code></td><td>Position-aware retrieval caution</td><td>Flags where in documents instability tends to occur.</td></tr>
+<tr><td><code>confusion inventories</code></td><td>Query expansion and fuzzy matching</td><td>Captures recurrent orthographic and graphemic variants.</td></tr>
+<tr><td><code>line_structure_document_flags</code></td><td>Chunk-boundary validation</td><td>Prevents line-unstable documents from being chunked without caution.</td></tr>
+</tbody>
+</table>
+
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>The central fine-tuning artefact is the style-stratified operational document table.</li>
+<li>The most useful immediate subset is: low-risk, high-continuity, low-IDR, stable-line documents within each style.</li>
+<li>The most useful review queue is: high-risk, low-continuity, high-IDR documents, especially in procesal and italica_cursiva.</li>
+</ul>
+</div>
+
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>The RAG pipeline should not scrape the HTML report. It should consume the exported CSV/JSON handoff files.</li>
+<li>Every indexed chunk should inherit document-level style, risk band, continuity, IDR, line-structure flag, and eventually chunk-level risk.</li>
+<li>Confusion inventories should be used to support fuzzy matching and historically aware query expansion.</li>
+</ul>
+</div>
+</section>
+
+<section id="critical">
+<h2>10. Critical cautions and academic interpretation</h2>
+
+<div class="box critical">
+<h3>Critical cautions</h3>
+<ul>
+<li>The topology section currently uses issue events per document. It is highly informative, but should not be overinterpreted as direct semantic damage without further validation.</li>
+<li>Some recurrent confusions are historically plausible orthographic variants rather than straightforward model failures.</li>
+<li>The risk index is style-relative. A high-risk redonda document is high-risk within redonda, not necessarily worse than every procesal document in absolute terms.</li>
+<li>Line-structure instability is rare, so it is best treated as an escalation signal rather than a major corpus-wide explanation.</li>
+<li>RAG implications remain partly prospective until the actual chunking strategy is known.</li>
+</ul>
+</div>
+
+<div class="box interpretation">
+<h3>Overall interpretation</h3>
+<ul>
+<li>The report’s strongest contribution is not simply that it provides more metrics than CER/WER.</li>
+<li>Its contribution is that it shows how historical HTR quality can be governed as a multi-dimensional, style-conditioned, structurally uneven data problem.</li>
+<li>This places the work closer to data-centric ML and corpus governance than to conventional OCR benchmarking alone.</li>
+</ul>
+</div>
+
+<div class="box ml">
+<h3>Fine-tuning takeaway</h3>
+<ul>
+<li>The next experimental step should compare fine-tuning outcomes across curated subset regimes: clean-only, balanced risk, high-risk excluded, and style-specific curriculum.</li>
+<li>Evaluation should report not only CER/WER but also whether IDR, continuity, deletion topology, and recurrent confusions improve.</li>
+</ul>
+</div>
+
+<div class="box rag">
+<h3>RAG takeaway</h3>
+<ul>
+<li>The RAG system should begin with document-level quality metadata and later move to chunk-level scoring once chunking is finalised.</li>
+<li>The most important RAG risks are omission, low continuity, line/document positional instability, and entity-bearing lexical corruption.</li>
+</ul>
+</div>
+</section>
+
+</main>
 </body>
-
 </html>

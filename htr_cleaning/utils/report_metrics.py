@@ -1,26 +1,28 @@
 """
 report_metrics.py
 
-Script contains helpers to generate the corpus report
-Called by build_corpus_report.py
+Canonical analytics layer for the simplified HTR corpus report.
 
-Script carries out thr following:
+This refactored version focuses on the operational document metrics needed to:
+- describe the corpus clearly
+- support risk-weighted, stratified human review sampling
+- inform downstream ML transcript-cleaning work
 
-- loading and aggregating logged issues
-- describing the training corpus by style
-- computing true CER from GT/HTR text
-- computing style-level comparison metrics
-- estimating boundary-error behaviour
-- estimating alignment drift from Step 2 issue ratios
-- extracting style-specific character / bigram / word confusion signals
-- preparing document-level diagnostic tables
-
+Design principles
+-----------------
+- S1/S3 log counts are used only for surface/anomaly densities.
+- S2 log counts are not used for CER/WER/SDR/IDR; those are computed directly
+  from GT/HTR alignment.
+- The main output is a compact document-level operational metrics table with
+  robust style-relative risk scores and risk bands.
+- Debugging-oriented legacy diagnostics are deliberately minimised.
 """
 
 from __future__ import annotations
 
 from collections import Counter, defaultdict
 from pathlib import Path
+import json
 import math
 import statistics
 import unicodedata
@@ -34,132 +36,96 @@ from utils.file_io import load_json_if_exists, read_json, read_text
 
 
 # ---------------------------------------------------------------------
-# Constants
+# Report metric configuration
 # ---------------------------------------------------------------------
 
-DRIFT_THRESHOLD = 0.40
 MAX_BOUNDARY_NGRAM = 4
 MIN_WORD_CONFUSION_LEN = 3
+MIN_COHERENT_SPAN_CHARS = 50
+
+WINDOW_MODE = "relative"
+RELATIVE_WINDOW_COUNT = 10
+FIXED_WINDOW_SIZE_CHARS = 500
+MIN_WINDOW_REF_CHARS = 100
+
+LINE_COUNT_DIAGNOSTICS_PATH = LOGS_DIR / "line_counts" / "line_count_diagnostics.jsonl"
+
+RISK_WEIGHTS = {
+    "basic_anomaly_density": 0.5,
+    "orthographic_violation_density": 1.0,
+    "cer_norm": 2.0,
+    "wer_norm": 1.0,
+    "structural_drift_ratio": 1.5,
+    "indel_disruption_rate": 2.0,
+    "coverage_risk": 2.5,
+    "continuity_risk": 2.5,
+    "lasr_risk": 2.0,
+    "fragmentation": 1.5,
+    "window_max_cer": 1.5,
+    "window_sd_cer": 1.0,
+    "window_max_sdr": 1.5,
+    "boundary_burden_proportion": 1.0,
+    "adjusted_line_delta": 0.75,
+    "unmatched_htr_blank_density": 0.75,
+}
 
 
 # ---------------------------------------------------------------------
-# Formatting-neutral helpers
+# Generic helpers
 # ---------------------------------------------------------------------
+
+def safe_div(num: int | float, den: int | float) -> float:
+    return float(num) / float(den) if den else 0.0
+
 
 def percentile(values: list[float | int], p: float) -> float:
-    """
-    Return a simple percentile from a sorted list using the same deterministic
-    index method used elsewhere in the codebase
-
-    Parameters
-    ----------
-    values:
-        Sequence of numeric values
-    p:
-        Percentile in the interval [0, 1]
-
-    Returns
-    -------
-    float
-    """
     if not values:
         return 0.0
-
     ordered = sorted(values)
     idx = int(len(ordered) * p)
     idx = min(idx, len(ordered) - 1)
     return float(ordered[idx])
 
 
-def gini(values: list[int | float]) -> float:
-    """
-    Compute the Gini coefficient for a non-negative sequence.
+def mean_or_zero(values: list[float | int]) -> float:
+    return float(statistics.mean(values)) if values else 0.0
 
-    Interpretation
-    --------------
-    0.0
-        Perfectly uniform burden across documents.
-    1.0
-        All burden concentrated in one document.
-    """
-    ordered = sorted(v for v in values if v >= 0)
-    if not ordered:
+
+def median_or_zero(values: list[float | int]) -> float:
+    return float(statistics.median(values)) if values else 0.0
+
+
+def stdev_or_zero(values: list[float | int]) -> float:
+    return float(statistics.stdev(values)) if len(values) > 1 else 0.0
+
+
+def median_absolute_deviation(values: list[float | int]) -> float:
+    if not values:
         return 0.0
-
-    total = sum(ordered)
-    if total == 0:
-        return 0.0
-
-    weighted = 0.0
-    for idx, value in enumerate(ordered, start = 1):
-        weighted += idx * value
-
-    n = len(ordered)
-    return (2 * weighted) / (n * total) - (n + 1) / n
+    med = statistics.median(values)
+    return float(statistics.median([abs(float(x) - med) for x in values]))
 
 
-def lorenz_points(values: list[int | float]) -> list[tuple[float, float]]:
-    """
-    Build Lorenz-curve coordinates for a sequence of document burdens.
-    """
-    ordered = sorted(v for v in values if v >= 0)
-    if not ordered:
-        return [(0.0, 0.0), (1.0, 1.0)]
-
-    total = sum(ordered)
-    if total == 0:
-        return [(0.0, 0.0), (1.0, 1.0)]
-
-    points = [(0.0, 0.0)]
-    running = 0.0
-
-    for idx, value in enumerate(ordered, start = 1):
-        running += value
-        points.append((idx / len(ordered), running / total))
-
-    return points
-
-
-def weight_label(diff_pp: float, threshold_pp: float = 1.0) -> str:
-    """
-    Labels whether a style is over- or under-represented in issues relative to
-    its share of the training corpus
-    """
-    if diff_pp > threshold_pp:
-        return "Overweight"
-    if diff_pp < -threshold_pp:
-        return "Underweight"
-    return "Balanced"
+def robust_z(value: float, median: float, mad: float) -> float:
+    return (float(value) - median) / mad if mad else 0.0
 
 
 # ---------------------------------------------------------------------
-# Text normalisation for CER
+# Text normalisation
 # ---------------------------------------------------------------------
 
 def normalise_text_for_cer(text: str) -> str:
-    """
-    Normalise text for model-oriented CER
-
-    Steps
-    -----
-    - casefold
-    - normalise Unicode to NFC
-    - retain Latin letters only
-    - remove whitespace, punctuation, digits, and other symbols
-
-    Reasining
-    ---------
-    The first-stage cleaning goal is not punctuation expansion or whitespace
-    normalisation. A normalised CER therefore gives a cleaner measure of
-    orthographic/transcription burden for downstream ML.
-
-    Notes
-    -----
-    This intentionally keeps historical Latin graphemes such as accented vowels,
-    ñ, ü, and ç, while excluding digits and punctuation.
-    """
     text = unicodedata.normalize("NFC", text.casefold())
     return "".join(ch for ch in text if re.match(r"\p{Latin}", ch))
+
+
+def normalise_tokens_for_wer(text: str) -> list[str]:
+    text = unicodedata.normalize("NFC", text.casefold())
+    return re.findall(r"\p{Latin}+", text)
+
+
+def _splitlines_nonempty(text: str) -> list[str]:
+    return [line for line in text.splitlines() if line.strip()]
 
 
 # ---------------------------------------------------------------------
@@ -167,30 +133,19 @@ def normalise_text_for_cer(text: str) -> str:
 # ---------------------------------------------------------------------
 
 def load_stopwords() -> set[str]:
-    """
-    Load stopwords from the first known schema location that exists
-    """
     candidates = [
         SCHEMAS_DIR / "stopwords.json",
         SCHEMAS_DIR / "spanish_stopwords.json",
         Path("schemas_and_manifests/stopwords.json"),
         Path("schemas_and_manifests/spanish_stopwords.json"),
     ]
-
     for path in candidates:
         if path.exists():
             return {str(x).strip().lower() for x in read_json(path)}
-
     return set()
 
 
 def load_all_issues() -> list[dict[str, Any]]:
-    """
-    Load all per-document issues and inject style/doc_id from directory structure
-
-    Only training documents have issue logs in the current pipeline, so this is
-    effectively a training-corpus view of logged issues
-    """
     issues: list[dict[str, Any]] = []
 
     for style_dir in LOGS_DIR.iterdir():
@@ -211,7 +166,6 @@ def load_all_issues() -> list[dict[str, Any]]:
                 continue
 
             doc_issues = load_json_if_exists(issues_path, [])
-
             for issue in doc_issues:
                 item = dict(issue)
                 item["style"] = style
@@ -221,48 +175,31 @@ def load_all_issues() -> list[dict[str, Any]]:
     return issues
 
 
+def build_doc_issue_lookup(issues: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    lookup: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for issue in issues:
+        lookup[issue["doc_id"]].append(issue)
+    return lookup
+
+
 # ---------------------------------------------------------------------
 # Corpus description
 # ---------------------------------------------------------------------
 
-def _splitlines_nonempty(text: str) -> list[str]:
-    """
-    Return non-empty lines for descriptive corpus geometry
-    """
-    return [line for line in text.splitlines() if line.strip()]
-
-
 def train_distribution_by_style(train_pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Count training documents by style and compute share of the training corpus
-    """
     counts = Counter(p["style"] for p in train_pairs)
     total = sum(counts.values())
-
-    rows = []
-    for style in sorted(counts):
-        n_docs = counts[style]
-        pct_train = (n_docs / total) if total else 0.0
-
-        rows.append({
+    return [
+        {
             "style": style,
-            "train_docs": n_docs,
-            "pct_train": pct_train,
-        })
-
-    return rows
+            "train_docs": counts[style],
+            "pct_train": safe_div(counts[style], total),
+        }
+        for style in sorted(counts)
+    ]
 
 
 def geometry_by_style(train_pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Describe the training corpus by style to include:
-
-    - document count
-    - total lines / tokens / chars
-    - per-document line-count percentiles
-    - per-document token-count percentiles
-    - per-line character-length percentiles
-    """
     line_lengths_by_style: dict[str, list[int]] = defaultdict(list)
     doc_lines_by_style: dict[str, list[int]] = defaultdict(list)
     doc_tokens_by_style: dict[str, list[int]] = defaultdict(list)
@@ -273,7 +210,7 @@ def geometry_by_style(train_pairs: list[dict[str, Any]]) -> list[dict[str, Any]]
 
     for pair in train_pairs:
         style = pair["style"]
-        text = read_text(Path(pair["htr_path"]))
+        text = read_text(Path(pair.get("gt_path") or pair["htr_path"]))
         lines = _splitlines_nonempty(text)
 
         doc_counts[style] += 1
@@ -282,7 +219,6 @@ def geometry_by_style(train_pairs: list[dict[str, Any]]) -> list[dict[str, Any]]
 
         token_count = 0
         char_count = 0
-
         for line in lines:
             tokens = line.split()
             token_count += len(tokens)
@@ -320,24 +256,20 @@ def geometry_by_style(train_pairs: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 
 # ---------------------------------------------------------------------
-# Logged issue overview
+# Issue-log metrics
 # ---------------------------------------------------------------------
 
 def issue_stage_overview(issues: list[dict[str, Any]]) -> dict[str, Any]:
-    """
-    Summarise total issues and split out by pipeline stage
-    """
     counts = Counter(i["tag"][:2] for i in issues)
     total = sum(counts.values())
-
     return {
         "total_issues": total,
         "S1": counts.get("S1", 0),
         "S2": counts.get("S2", 0),
         "S3": counts.get("S3", 0),
-        "S1_pct": counts.get("S1", 0) / total if total else 0.0,
-        "S2_pct": counts.get("S2", 0) / total if total else 0.0,
-        "S3_pct": counts.get("S3", 0) / total if total else 0.0,
+        "S1_pct": safe_div(counts.get("S1", 0), total),
+        "S2_pct": safe_div(counts.get("S2", 0), total),
+        "S3_pct": safe_div(counts.get("S3", 0), total),
     }
 
 
@@ -345,10 +277,6 @@ def issue_distribution_by_style(
     issues: list[dict[str, Any]],
     train_pairs: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """
-    Compare each style's share of logged issues against its share of the
-    training corpus
-    """
     issue_counts = Counter(i["style"] for i in issues)
     train_counts = Counter(p["style"] for p in train_pairs)
     stage_counts = defaultdict(Counter)
@@ -363,11 +291,9 @@ def issue_distribution_by_style(
     for style in sorted(set(issue_counts) | set(train_counts)):
         issue_n = issue_counts.get(style, 0)
         train_n = train_counts.get(style, 0)
-
-        corpus_pct = train_n / total_train if total_train else 0.0
-        issue_pct = issue_n / total_issues if total_issues else 0.0
+        corpus_pct = safe_div(train_n, total_train)
+        issue_pct = safe_div(issue_n, total_issues)
         diff_pp = (issue_pct - corpus_pct) * 100
-
         rows.append({
             "style": style,
             "train_docs": train_n,
@@ -375,32 +301,288 @@ def issue_distribution_by_style(
             "issues": issue_n,
             "pct_issues": issue_pct,
             "diff_pp": diff_pp,
-            "weight": weight_label(diff_pp),
+            "weight": "Overweight" if diff_pp > 1 else "Underweight" if diff_pp < -1 else "Balanced",
             "S1": stage_counts[style].get("S1", 0),
             "S2": stage_counts[style].get("S2", 0),
             "S3": stage_counts[style].get("S3", 0),
         })
-
     return rows
 
 
+def issue_anomaly_counts(doc_issues: list[dict[str, Any]], ref_chars_norm: int) -> dict[str, Any]:
+    stage_counts = Counter((issue.get("tag") or "")[:2] for issue in doc_issues)
+    basic_count = stage_counts.get("S1", 0)
+    orth_count = stage_counts.get("S3", 0)
+    return {
+        "basic_anomaly_count": basic_count,
+        "orthographic_violation_count": orth_count,
+        "basic_anomaly_density": safe_div(basic_count, ref_chars_norm) * 1000,
+        "orthographic_violation_density": safe_div(orth_count, ref_chars_norm) * 1000,
+    }
+
+
 # ---------------------------------------------------------------------
-# True edit burden from raw text
+# Line-structure diagnostics
 # ---------------------------------------------------------------------
 
-def compute_edit_counts(gt_text: str, htr_text: str) -> dict[str, int]:
+def load_line_count_diagnostics(
+    path: Path = LINE_COUNT_DIAGNOSTICS_PATH,
+) -> dict[str, dict[str, Any]]:
     """
-    Compute substitutions, deletions, insertions, and total edits from raw text
+    Load compact line-count diagnostics keyed by both pair_id and doc_id.
 
-    This uses RapidFuzz edit operations on the normalised text used for the
-    report's main CER comparisons.
+    The diagnostics JSONL is produced before report generation by
+    run_line_count_diagnostics.py. If the file is absent, the report still
+    builds and line-structure fields default to zero.
     """
+    lookup: dict[str, dict[str, Any]] = {}
+
+    if not path.exists():
+        return lookup
+
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+
+            row = json.loads(line)
+
+            if row.get("pair_id"):
+                lookup[str(row["pair_id"])] = row
+            if row.get("doc_id"):
+                lookup[str(row["doc_id"])] = row
+
+    return lookup
+
+
+def line_structure_metrics(
+    pair: dict[str, Any],
+    lookup: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """
+    Return compact GT/HTR line-structure metrics from diagnostics JSONL.
+
+    These metrics summarise whether the paired GT and HTR files remain
+    structurally comparable after blank-line handling.
+    """
+    row = lookup.get(str(pair.get("id")), {})
+
+    if not row:
+        htr_path = Path(pair.get("htr_path", ""))
+        row = lookup.get(htr_path.stem, {})
+
+    gt_adjusted = int(row.get("gt_adjusted_line_count", 0) or 0)
+    htr_adjusted = int(row.get("htr_adjusted_line_count", 0) or 0)
+    unmatched_htr_blank = int(row.get("htr_blank_preserved_unmatched_count", 0) or 0)
+
+    adjusted_delta = abs(gt_adjusted - htr_adjusted)
+
+    return {
+        "gt_adjusted_line_count": gt_adjusted,
+        "htr_adjusted_line_count": htr_adjusted,
+        "adjusted_line_delta": adjusted_delta,
+        "line_count_ratio": safe_div(
+            min(gt_adjusted, htr_adjusted),
+            max(gt_adjusted, htr_adjusted),
+        ),
+        "unmatched_htr_blank_count": unmatched_htr_blank,
+        "unmatched_htr_blank_density": safe_div(unmatched_htr_blank, gt_adjusted),
+    }
+
+
+# ---------------------------------------------------------------------
+# Alignment metrics
+# ---------------------------------------------------------------------
+
+def _editop_fields(op: Any) -> tuple[str, int, int]:
+    tag = getattr(op, "tag", op[0])
+    src_pos = getattr(op, "src_pos", op[1])
+    dest_pos = getattr(op, "dest_pos", op[2])
+    return tag, int(src_pos), int(dest_pos)
+
+
+def alignment_operations(gt_norm: str, htr_norm: str) -> list[dict[str, Any]]:
+    ops: list[dict[str, Any]] = []
+    gt_idx = 0
+    htr_idx = 0
+
+    for editop in Levenshtein.editops(gt_norm, htr_norm):
+        tag, src_pos, dest_pos = _editop_fields(editop)
+
+        while gt_idx < src_pos and htr_idx < dest_pos:
+            ops.append({"op": "M", "gt_pos": gt_idx, "htr_pos": htr_idx})
+            gt_idx += 1
+            htr_idx += 1
+
+        if tag == "replace":
+            ops.append({"op": "S", "gt_pos": src_pos, "htr_pos": dest_pos})
+            gt_idx = src_pos + 1
+            htr_idx = dest_pos + 1
+        elif tag == "delete":
+            ops.append({"op": "D", "gt_pos": src_pos, "htr_pos": dest_pos})
+            gt_idx = src_pos + 1
+            htr_idx = dest_pos
+        elif tag == "insert":
+            ops.append({"op": "I", "gt_pos": src_pos, "htr_pos": dest_pos})
+            gt_idx = src_pos
+            htr_idx = dest_pos + 1
+
+    while gt_idx < len(gt_norm) and htr_idx < len(htr_norm):
+        ops.append({"op": "M", "gt_pos": gt_idx, "htr_pos": htr_idx})
+        gt_idx += 1
+        htr_idx += 1
+
+    while gt_idx < len(gt_norm):
+        ops.append({"op": "D", "gt_pos": gt_idx, "htr_pos": htr_idx})
+        gt_idx += 1
+
+    while htr_idx < len(htr_norm):
+        ops.append({"op": "I", "gt_pos": gt_idx, "htr_pos": htr_idx})
+        htr_idx += 1
+
+    return ops
+
+
+def _span_lengths_from_ops(ops: list[dict[str, Any]]) -> list[int]:
+    spans: list[int] = []
+    current = 0
+    for item in ops:
+        if item["op"] in {"M", "S"}:
+            current += 1
+        elif current:
+            spans.append(current)
+            current = 0
+    if current:
+        spans.append(current)
+    return spans
+
+
+def _error_run_lengths_from_ops(ops: list[dict[str, Any]]) -> list[int]:
+    runs: list[int] = []
+    current = 0
+    for item in ops:
+        if item["op"] != "M":
+            current += 1
+        elif current:
+            runs.append(current)
+            current = 0
+    if current:
+        runs.append(current)
+    return runs
+
+
+def _alignment_metrics_from_ops(
+    ops: list[dict[str, Any]],
+    ref_len: int,
+    span_threshold: int = MIN_COHERENT_SPAN_CHARS,
+) -> dict[str, Any]:
+    counts = Counter(item["op"] for item in ops)
+    m = counts.get("M", 0)
+    s = counts.get("S", 0)
+    d = counts.get("D", 0)
+    i = counts.get("I", 0)
+    edits = s + d + i
+    aligned_total = m + s + d + i
+
+    spans = _span_lengths_from_ops(ops)
+    error_runs = _error_run_lengths_from_ops(ops)
+    longest_span = max(spans) if spans else 0
+
+    return {
+        "matches": m,
+        "substitutions": s,
+        "deletions": d,
+        "insertions": i,
+        "edits": edits,
+        "norm_len": ref_len,
+        "aligned_total": aligned_total,
+        "cer_norm": safe_div(edits, ref_len),
+        "structural_drift_ratio": safe_div(i + d, edits),
+        "indel_disruption_rate": safe_div(i + d, aligned_total),
+        "coverage": safe_div(m + s, m + s + d),
+        "continuity": safe_div(sum(x for x in spans if x >= span_threshold), ref_len),
+        "lasr": safe_div(longest_span, ref_len),
+        "fragmentation": safe_div(len(error_runs), ref_len) * 1000,
+    }
+
+
+def document_window_size(ref_len: int) -> int:
+    if ref_len <= 0:
+        return 0
+    if WINDOW_MODE == "fixed":
+        return max(1, FIXED_WINDOW_SIZE_CHARS)
+    if WINDOW_MODE != "relative":
+        raise ValueError(f"Unsupported WINDOW_MODE {WINDOW_MODE!r}")
+    return max(MIN_WINDOW_REF_CHARS, math.ceil(ref_len / max(1, RELATIVE_WINDOW_COUNT)))
+
+
+def _windowed_alignment_metrics_from_ops(ops: list[dict[str, Any]], ref_len: int) -> dict[str, Any]:
+    if ref_len <= 0:
+        return {
+            "window_mode": WINDOW_MODE,
+            "window_size": 0,
+            "window_count": 0,
+            "window_max_cer": 0.0,
+            "window_sd_cer": 0.0,
+            "window_max_sdr": 0.0,
+        }
+
+    window_size = document_window_size(ref_len)
+    window_count = math.ceil(ref_len / window_size)
+    windows: list[list[dict[str, Any]]] = [[] for _ in range(window_count)]
+
+    for item in ops:
+        gt_pos = max(0, min(int(item.get("gt_pos", 0)), ref_len - 1))
+        idx = min(gt_pos // window_size, window_count - 1)
+        windows[idx].append(item)
+
+    metrics = []
+    for idx, window_ops in enumerate(windows):
+        start = idx * window_size
+        end = min(start + window_size, ref_len)
+        metrics.append(_alignment_metrics_from_ops(window_ops, end - start))
+
+    cer_vals = [m["cer_norm"] for m in metrics]
+    sdr_vals = [m["structural_drift_ratio"] for m in metrics]
+
+    return {
+        "window_mode": WINDOW_MODE,
+        "window_size": window_size,
+        "window_count": window_count,
+        "window_max_cer": max(cer_vals) if cer_vals else 0.0,
+        "window_sd_cer": stdev_or_zero(cer_vals),
+        "window_max_sdr": max(sdr_vals) if sdr_vals else 0.0,
+    }
+
+
+def compute_alignment_quality_metrics(gt_text: str, htr_text: str) -> dict[str, Any]:
     gt_norm = normalise_text_for_cer(gt_text)
     htr_norm = normalise_text_for_cer(htr_text)
+    ops = alignment_operations(gt_norm, htr_norm)
+    whole = _alignment_metrics_from_ops(ops, len(gt_norm))
+    windowed = _windowed_alignment_metrics_from_ops(ops, len(gt_norm))
+    return {**whole, **windowed}
+
+
+def compute_edit_counts(gt_text: str, htr_text: str) -> dict[str, int | float]:
+    metrics = compute_alignment_quality_metrics(gt_text, htr_text)
+    return {
+        "substitutions": metrics["substitutions"],
+        "deletions": metrics["deletions"],
+        "insertions": metrics["insertions"],
+        "edits": metrics["edits"],
+        "norm_len": metrics["norm_len"],
+        "matches": metrics["matches"],
+    }
+
+
+def compute_wer_counts(gt_text: str, htr_text: str) -> dict[str, Any]:
+    gt_tokens = normalise_tokens_for_wer(gt_text)
+    htr_tokens = normalise_tokens_for_wer(htr_text)
 
     s = d = i = 0
-    for op in Levenshtein.editops(gt_norm, htr_norm):
-        tag = getattr(op, "tag", op[0])
+    for op in Levenshtein.editops(gt_tokens, htr_tokens):
+        tag, _, _ = _editop_fields(op)
         if tag == "replace":
             s += 1
         elif tag == "delete":
@@ -408,30 +590,23 @@ def compute_edit_counts(gt_text: str, htr_text: str) -> dict[str, int]:
         elif tag == "insert":
             i += 1
 
+    edits = s + d + i
     return {
-        "substitutions": s,
-        "deletions": d,
-        "insertions": i,
-        "edits": s + d + i,
-        "norm_len": len(gt_norm),
+        "wer_norm": safe_div(edits, len(gt_tokens)),
+        "wer_edits": edits,
+        "ref_tokens_norm": len(gt_tokens),
     }
 
 
 # ---------------------------------------------------------------------
-# Boundary-event diagnostics
+# Boundary metrics
 # ---------------------------------------------------------------------
 
 def tokenise_for_boundary(text: str) -> list[str]:
-    """
-    Tokenise text for boundary-event analysis using simple whitespace tokenisation
-    """
     return text.split()
 
 
 def boundary_norm(token: str) -> str:
-    """
-    Remove whitespace and lowercase for token-boundary comparisons
-    """
     return "".join(token.split()).casefold()
 
 
@@ -440,38 +615,11 @@ def detect_boundary_events_for_doc(
     htr_text: str,
     max_span: int = MAX_BOUNDARY_NGRAM,
 ) -> dict[str, Any]:
-    """
-    Detect boundary-only candidate events in a conservative local scan
-
-    Event types
-    -----------
-    split
-        One GT token corresponds to multiple HTR tokens.
-    merge
-        Multiple GT tokens correspond to one HTR token.
-    complex
-        Multi-token-to-multi-token boundary-only remapping.
-
-    Matching rule
-    -------------
-    Concatenated token spans must match exactly after whitespace removal and
-    casefolding. This keeps the boundary signal conservative and avoids
-    conflating boundary shifts with broader character errors.
-
-    Notes
-    ---------
-    This is intentionally conservative and approximate. It is most trustworthy
-    when alignment drift is limited. For high-drift documents, boundary metrics
-    should be interpreted with caution.
-    """
     gt_tokens = tokenise_for_boundary(gt_text)
     htr_tokens = tokenise_for_boundary(htr_text)
 
-    i = 0
-    j = 0
-    split_count = 0
-    merge_count = 0
-    complex_count = 0
+    i = j = 0
+    split_count = merge_count = complex_count = 0
     examples = Counter()
 
     while i < len(gt_tokens) and j < len(htr_tokens):
@@ -481,11 +629,9 @@ def detect_boundary_events_for_doc(
             continue
 
         matched = False
-
         for a in range(1, max_span + 1):
             if i + a > len(gt_tokens):
                 break
-
             gt_span = gt_tokens[i:i + a]
             gt_join = "".join(boundary_norm(tok) for tok in gt_span)
 
@@ -494,14 +640,12 @@ def detect_boundary_events_for_doc(
                     break
                 if a == 1 and b == 1:
                     continue
-
                 htr_span = htr_tokens[j:j + b]
                 htr_join = "".join(boundary_norm(tok) for tok in htr_span)
 
                 if gt_join and gt_join == htr_join:
                     gt_label = " ".join(gt_span)
                     htr_label = " ".join(htr_span)
-
                     if a == 1 and b > 1:
                         split_count += 1
                         examples[("split", gt_label, htr_label)] += 1
@@ -511,12 +655,10 @@ def detect_boundary_events_for_doc(
                     else:
                         complex_count += 1
                         examples[("complex", gt_label, htr_label)] += 1
-
                     i += a
                     j += b
                     matched = True
                     break
-
             if matched:
                 break
 
@@ -536,73 +678,15 @@ def detect_boundary_events_for_doc(
 
 
 # ---------------------------------------------------------------------
-# Alignment drift from logged Step 2 issues
+# Document metrics and risk scoring
 # ---------------------------------------------------------------------
-
-def compute_drift_from_doc_issues(doc_issues: list[dict[str, Any]]) -> dict[str, Any]:
-    """
-    Recompute alignment-drift diagnostics from the per-document Step 2 issue mix
-
-    A document is flagged as drift if insertion or deletion ratio exceeds the
-    configured threshold
-
-    In addition to the binary drift flag, the returned `drift_skew` helps
-    distinguish insertion-heavy vs deletion-heavy drift behaviour
-    """
-    counts = Counter(i["tag"] for i in doc_issues if i.get("tag", "").startswith("S2"))
-
-    s2x = counts.get("S2X", 0)
-    s2i = counts.get("S2I", 0)
-    s2d = counts.get("S2D", 0)
-    total = s2x + s2i + s2d
-
-    insert_ratio = s2i / total if total else 0.0
-    delete_ratio = s2d / total if total else 0.0
-    replace_ratio = s2x / total if total else 0.0
-
-    return {
-        "s2_total": total,
-        "s2x": s2x,
-        "s2i": s2i,
-        "s2d": s2d,
-        "insert_ratio": insert_ratio,
-        "delete_ratio": delete_ratio,
-        "replace_ratio": replace_ratio,
-        "drift_skew": abs(insert_ratio - delete_ratio),
-        "drift_flag": (insert_ratio > DRIFT_THRESHOLD) or (delete_ratio > DRIFT_THRESHOLD),
-    }
-
-
-# ---------------------------------------------------------------------
-# Per-document master metrics
-# ---------------------------------------------------------------------
-
-def build_doc_issue_lookup(issues: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    """
-    Group issues by document id.
-    """
-    lookup = defaultdict(list)
-    for issue in issues:
-        lookup[issue["doc_id"]].append(issue)
-    return lookup
-
 
 def compute_doc_metrics(
     train_pairs: list[dict[str, Any]],
     issues: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """
-    Compute the full document-level metric set used by the report
-
-    Notes
-    -----
-    - true edits are based on normalised GT/HTR text
-    - issue counts are loaded from logs and kept separate
-    - boundary events are computed from raw token sequences
-    - edit_density is included so long documents do not dominate absolute
-      burden views by length alone
-    """
     doc_issue_lookup = build_doc_issue_lookup(issues)
+    line_lookup = load_line_count_diagnostics()
     rows: list[dict[str, Any]] = []
 
     for pair in train_pairs:
@@ -612,203 +696,257 @@ def compute_doc_metrics(
         gt_text = read_text(Path(pair["gt_path"]))
         htr_text = read_text(Path(pair["htr_path"]))
 
-        cer_raw = Levenshtein.distance(gt_text, htr_text) / max(len(gt_text), 1)
-        edits = compute_edit_counts(gt_text, htr_text)
-        boundary = detect_boundary_events_for_doc(gt_text, htr_text)
-        doc_issues = doc_issue_lookup.get(doc_id, [])
-        drift = compute_drift_from_doc_issues(doc_issues)
+        line_count = len(_splitlines_nonempty(gt_text))
+        token_count = len(normalise_tokens_for_wer(gt_text))
 
-        stage_counts = Counter(i["tag"][:2] for i in doc_issues)
+        alignment = compute_alignment_quality_metrics(gt_text, htr_text)
+        wer = compute_wer_counts(gt_text, htr_text)
+        boundary = detect_boundary_events_for_doc(gt_text, htr_text)
+
+        doc_issues = doc_issue_lookup.get(doc_id, [])
+        anomaly = issue_anomaly_counts(doc_issues, alignment["norm_len"])
+        line_metrics = line_structure_metrics(pair, line_lookup)
+        boundary_burden = safe_div(boundary["boundary_events"], alignment["edits"])
 
         rows.append({
             "doc_id": doc_id,
             "style": style,
-            "cer_raw": cer_raw,
-            "cer_norm": edits["edits"] / max(edits["norm_len"], 1),
-            "ref_chars_norm": edits["norm_len"],
-            "edit_density": edits["edits"] / max(edits["norm_len"], 1),
-            "edits_per_1k_chars": (edits["edits"] / max(edits["norm_len"], 1)) * 1000,
-            "substitutions": edits["substitutions"],
-            "deletions": edits["deletions"],
-            "insertions": edits["insertions"],
-            "edits": edits["edits"],
+            "ref_chars_norm": alignment["norm_len"],
+            "token_count": token_count,
+            "line_count": line_count,
+            "gt_adjusted_line_count": line_metrics["gt_adjusted_line_count"],
+            "htr_adjusted_line_count": line_metrics["htr_adjusted_line_count"],
+            "adjusted_line_delta": line_metrics["adjusted_line_delta"],
+            "line_count_ratio": line_metrics["line_count_ratio"],
+            "unmatched_htr_blank_count": line_metrics["unmatched_htr_blank_count"],
+            "unmatched_htr_blank_density": line_metrics["unmatched_htr_blank_density"],
+
+            "basic_anomaly_count": anomaly["basic_anomaly_count"],
+            "orthographic_violation_count": anomaly["orthographic_violation_count"],
+            "basic_anomaly_density": anomaly["basic_anomaly_density"],
+            "orthographic_violation_density": anomaly["orthographic_violation_density"],
+
+            "cer_norm": alignment["cer_norm"],
+            "wer_norm": wer["wer_norm"],
+            "structural_drift_ratio": alignment["structural_drift_ratio"],
+
+            "indel_disruption_rate": alignment["indel_disruption_rate"],
+            "coverage": alignment["coverage"],
+            "continuity": alignment["continuity"],
+            "lasr": alignment["lasr"],
+            "fragmentation": alignment["fragmentation"],
+
+            "window_max_cer": alignment["window_max_cer"],
+            "window_sd_cer": alignment["window_sd_cer"],
+            "window_max_sdr": alignment["window_max_sdr"],
+
+            "boundary_burden_proportion": boundary_burden,
+
+            "edits": alignment["edits"],
+            "matches": alignment["matches"],
+            "substitutions": alignment["substitutions"],
+            "deletions": alignment["deletions"],
+            "insertions": alignment["insertions"],
+            "wer_edits": wer["wer_edits"],
+            "ref_tokens_norm": wer["ref_tokens_norm"],
+            "boundary_events": boundary["boundary_events"],
             "split_count": boundary["splits"],
             "merge_count": boundary["merges"],
             "complex_boundary": boundary["complex_boundary"],
-            "boundary_events": boundary["boundary_events"],
-            "gt_tokens": boundary["gt_tokens"],
-            "boundary_pct_of_edits": (
-                boundary["boundary_events"] / edits["edits"] if edits["edits"] else 0.0
-            ),
             "logged_issues": len(doc_issues),
-            "S1_issues": stage_counts.get("S1", 0),
-            "S2_issues": stage_counts.get("S2", 0),
-            "S3_issues": stage_counts.get("S3", 0),
-            "drift_flag": drift["drift_flag"],
-            "drift_insert_ratio": drift["insert_ratio"],
-            "drift_delete_ratio": drift["delete_ratio"],
-            "drift_replace_ratio": drift["replace_ratio"],
-            "drift_skew": drift["drift_skew"],
-            "s2_total": drift["s2_total"],
+            "S1_issues": anomaly["basic_anomaly_count"],
+            "S3_issues": anomaly["orthographic_violation_count"],
+            "window_mode": alignment["window_mode"],
+            "window_size": alignment["window_size"],
+            "window_count": alignment["window_count"],
         })
 
+    add_risk_features(rows)
     return rows
 
 
+def add_risk_features(rows: list[dict[str, Any]]) -> None:
+    if not rows:
+        return
+
+    for row in rows:
+        row["coverage_risk"] = 1.0 - row["coverage"]
+        row["continuity_risk"] = 1.0 - row["continuity"]
+        row["lasr_risk"] = 1.0 - row["lasr"]
+
+    by_style: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        by_style[row["style"]].append(row)
+
+    for style_rows in by_style.values():
+        for metric in RISK_WEIGHTS:
+            values = [float(r.get(metric, 0.0)) for r in style_rows]
+            med = median_or_zero(values)
+            mad = median_absolute_deviation(values)
+            z_col = f"{metric}_z"
+            for row in style_rows:
+                row[z_col] = robust_z(float(row.get(metric, 0.0)), med, mad)
+
+    for row in rows:
+        row["risk_score"] = sum(
+            row.get(f"{metric}_z", 0.0) * weight
+            for metric, weight in RISK_WEIGHTS.items()
+        )
+
+    ranked = sorted(rows, key=lambda r: (-r["risk_score"], r["style"], r["doc_id"]))
+    for rank, row in enumerate(ranked, start=1):
+        row["risk_rank"] = rank
+
+    for style_rows in by_style.values():
+        style_ranked = sorted(style_rows, key=lambda r: (-r["risk_score"], r["doc_id"]))
+        n = len(style_ranked)
+        for idx, row in enumerate(style_ranked):
+            frac = idx / n if n else 0.0
+            if frac < 1 / 3:
+                row["risk_band"] = "High"
+            elif frac < 2 / 3:
+                row["risk_band"] = "Medium"
+            else:
+                row["risk_band"] = "Low"
+
+
+def operational_metric_columns(include_z: bool = False) -> list[str]:
+    base_cols = [
+        "doc_id",
+        "style",
+        "ref_chars_norm",
+        "token_count",
+        "line_count",
+        "gt_adjusted_line_count",
+        "htr_adjusted_line_count",
+        "adjusted_line_delta",
+        "line_count_ratio",
+        "unmatched_htr_blank_count",
+        "unmatched_htr_blank_density",
+        "basic_anomaly_density",
+        "orthographic_violation_density",
+        "cer_norm",
+        "wer_norm",
+        "structural_drift_ratio",
+        "indel_disruption_rate",
+        "coverage",
+        "continuity",
+        "lasr",
+        "fragmentation",
+        "window_max_cer",
+        "window_sd_cer",
+        "window_max_sdr",
+        "boundary_burden_proportion",
+        "risk_score",
+        "risk_rank",
+        "risk_band",
+    ]
+    if not include_z:
+        return base_cols
+    return base_cols + [f"{metric}_z" for metric in RISK_WEIGHTS]
+
+
 # ---------------------------------------------------------------------
-# Style-first comparison layer
+# Style summaries and optional plot data
 # ---------------------------------------------------------------------
 
 def aggregate_style_metrics(doc_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """
-    Aggregate document metrics into the primary style-comparison layer.
-
-    Returns
-    -------
-    dict with:
-        - corpus_summary
-        - style_rows
-        - concentration_rows
-        - lorenz_data
-    """
     by_style: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in doc_rows:
         by_style[row["style"]].append(row)
 
-    corpus_docs = len(doc_rows)
-    corpus_edits = sum(r["edits"] for r in doc_rows)
-    corpus_chars = sum(r["ref_chars_norm"] for r in doc_rows)
-    corpus_boundary_events = sum(r["boundary_events"] for r in doc_rows)
-    corpus_splits = sum(r["split_count"] for r in doc_rows)
-    corpus_merges = sum(r["merge_count"] for r in doc_rows)
-    corpus_gt_tokens = sum(r["gt_tokens"] for r in doc_rows)
-
-    corpus_mean_cer = statistics.mean(r["cer_norm"] for r in doc_rows) if doc_rows else 0.0
-    corpus_boundary_pct = corpus_boundary_events / corpus_edits if corpus_edits else 0.0
-    corpus_split_rate = (corpus_splits / corpus_gt_tokens) * 1000 if corpus_gt_tokens else 0.0
-    corpus_merge_rate = (corpus_merges / corpus_gt_tokens) * 1000 if corpus_gt_tokens else 0.0
-    corpus_drift_rate = sum(1 for r in doc_rows if r["drift_flag"]) / corpus_docs if corpus_docs else 0.0
-    corpus_edit_density = corpus_edits / corpus_chars if corpus_chars else 0.0
-
     corpus_summary = {
-        "docs": corpus_docs,
-        "ref_chars_norm": corpus_chars,
-        "edits": corpus_edits,
-        "mean_cer_norm": corpus_mean_cer,
-        "boundary_pct": corpus_boundary_pct,
-        "split_rate": corpus_split_rate,
-        "merge_rate": corpus_merge_rate,
-        "drift_rate": corpus_drift_rate,
-        "edit_density": corpus_edit_density,
+        "docs": len(doc_rows),
+        "ref_chars_norm": sum(r["ref_chars_norm"] for r in doc_rows),
+        "tokens": sum(r["token_count"] for r in doc_rows),
+        "lines": sum(r["line_count"] for r in doc_rows),
+        "mean_cer_norm": mean_or_zero([r["cer_norm"] for r in doc_rows]),
+        "median_cer_norm": median_or_zero([r["cer_norm"] for r in doc_rows]),
+        "mean_wer_norm": mean_or_zero([r["wer_norm"] for r in doc_rows]),
+        "mean_risk_score": mean_or_zero([r["risk_score"] for r in doc_rows]),
     }
 
     style_rows = []
-    concentration_rows = []
-    lorenz_data = {}
-
     for style in sorted(by_style):
         docs = by_style[style]
-        cer_vals = [r["cer_norm"] for r in docs]
-        edit_vals = [r["edits"] for r in docs]
-
-        total_gt_tokens = sum(r["gt_tokens"] for r in docs)
-        total_ref_chars = sum(r["ref_chars_norm"] for r in docs)
-        total_edits = sum(r["edits"] for r in docs)
-        total_s = sum(r["substitutions"] for r in docs)
-        total_d = sum(r["deletions"] for r in docs)
-        total_i = sum(r["insertions"] for r in docs)
-        total_splits = sum(r["split_count"] for r in docs)
-        total_merges = sum(r["merge_count"] for r in docs)
-        total_boundary = sum(r["boundary_events"] for r in docs)
-
-        drift_docs = sum(1 for r in docs if r["drift_flag"])
-        clean_1 = sum(1 for r in docs if r["cer_norm"] < 0.01)
-        clean_2 = sum(1 for r in docs if r["cer_norm"] < 0.02)
-        clean_5 = sum(1 for r in docs if r["cer_norm"] < 0.05)
-
-        mean_cer = statistics.mean(cer_vals) if cer_vals else 0.0
-        median_cer = statistics.median(cer_vals) if cer_vals else 0.0
-        p90_cer = percentile(cer_vals, 0.90) if cer_vals else 0.0
-
-        split_rate = (total_splits / total_gt_tokens) * 1000 if total_gt_tokens else 0.0
-        merge_rate = (total_merges / total_gt_tokens) * 1000 if total_gt_tokens else 0.0
-        boundary_pct = total_boundary / total_edits if total_edits else 0.0
-        drift_rate = drift_docs / len(docs) if docs else 0.0
-        edit_density = total_edits / total_ref_chars if total_ref_chars else 0.0
-
         style_rows.append({
             "style": style,
             "docs": len(docs),
-            "mean_cer": mean_cer,
-            "median_cer": median_cer,
-            "p90_cer": p90_cer,
-            "gini": gini(edit_vals),
-            "edit_density": edit_density,
-            "split_rate": split_rate,
-            "merge_rate": merge_rate,
-            "boundary_pct": boundary_pct,
-            "drift_rate": drift_rate,
-            "clean_lt_1_pct": clean_1 / len(docs) if docs else 0.0,
-            "clean_lt_2_pct": clean_2 / len(docs) if docs else 0.0,
-            "clean_lt_5_pct": clean_5 / len(docs) if docs else 0.0,
-            "sub_pct": total_s / total_edits if total_edits else 0.0,
-            "del_pct": total_d / total_edits if total_edits else 0.0,
-            "ins_pct": total_i / total_edits if total_edits else 0.0,
-            "delta_cer": mean_cer - corpus_mean_cer,
-            "delta_boundary_pct": boundary_pct - corpus_boundary_pct,
-            "delta_split_rate": split_rate - corpus_split_rate,
-            "delta_merge_rate": merge_rate - corpus_merge_rate,
-            "delta_drift_rate": drift_rate - corpus_drift_rate,
-            "delta_edit_density": edit_density - corpus_edit_density,
-            "total_edits": total_edits,
+            "ref_chars_norm": sum(r["ref_chars_norm"] for r in docs),
+            "tokens": sum(r["token_count"] for r in docs),
+            "lines": sum(r["line_count"] for r in docs),
+            "median_adjusted_line_delta": median_or_zero([r["adjusted_line_delta"] for r in docs]),
+            "p90_adjusted_line_delta": percentile([r["adjusted_line_delta"] for r in docs], 0.90),
+            "median_unmatched_htr_blank_density": median_or_zero([r["unmatched_htr_blank_density"] for r in docs]),
+            "median_cer": median_or_zero([r["cer_norm"] for r in docs]),
+            "p90_cer": percentile([r["cer_norm"] for r in docs], 0.90),
+            "median_wer": median_or_zero([r["wer_norm"] for r in docs]),
+            "p90_wer": percentile([r["wer_norm"] for r in docs], 0.90),
+            "median_sdr": median_or_zero([r["structural_drift_ratio"] for r in docs]),
+            "median_idr": median_or_zero([r["indel_disruption_rate"] for r in docs]),
+            "median_coverage": median_or_zero([r["coverage"] for r in docs]),
+            "median_continuity": median_or_zero([r["continuity"] for r in docs]),
+            "median_risk_score": median_or_zero([r["risk_score"] for r in docs]),
+            "high_risk_docs": sum(1 for r in docs if r["risk_band"] == "High"),
+            "medium_risk_docs": sum(1 for r in docs if r["risk_band"] == "Medium"),
+            "low_risk_docs": sum(1 for r in docs if r["risk_band"] == "Low"),
         })
-
-        ranked_edits = sorted(edit_vals, reverse = True)
-        top_decile_n = max(1, math.ceil(len(ranked_edits) * 0.10))
-        top_decile_share = sum(ranked_edits[:top_decile_n]) / total_edits if total_edits else 0.0
-        top_5_share = sum(ranked_edits[:5]) / total_edits if total_edits else 0.0
-
-        concentration_rows.append({
-            "style": style,
-            "docs": len(docs),
-            "total_edits": total_edits,
-            "gini": gini(edit_vals),
-            "top_10pct_docs_share": top_decile_share,
-            "top_5_docs_share": top_5_share,
-        })
-
-        lorenz_data[style] = lorenz_points(edit_vals)
 
     return {
         "corpus_summary": corpus_summary,
         "style_rows": style_rows,
-        "concentration_rows": concentration_rows,
-        "lorenz_data": lorenz_data,
     }
 
 
+def style_distribution_plot_data(
+    doc_rows: list[dict[str, Any]],
+    metrics: list[str] | None = None,
+) -> dict[str, dict[str, list[float]]]:
+    if metrics is None:
+        metrics = [
+            "cer_norm",
+            "wer_norm",
+            "structural_drift_ratio",
+            "indel_disruption_rate",
+            "coverage",
+            "continuity",
+            "lasr",
+            "fragmentation",
+            "adjusted_line_delta",
+            "unmatched_htr_blank_density",
+            "risk_score",
+        ]
+
+    out: dict[str, dict[str, list[float]]] = {
+        metric: defaultdict(list) for metric in metrics
+    }
+
+    for row in doc_rows:
+        style = row["style"]
+        for metric in metrics:
+            if metric in row:
+                out[metric][style].append(float(row[metric]))
+
+    return {metric: dict(style_map) for metric, style_map in out.items()}
+
+
 # ---------------------------------------------------------------------
-# Confusion drivers by style
+# Optional confusion helpers retained for appendix/internal use
 # ---------------------------------------------------------------------
 
 def char_confusions_by_style(
     issues: list[dict[str, Any]],
     top_n: int = 15,
 ) -> dict[str, list[dict[str, Any]]]:
-    """
-    Top character confusions by style from Step 2 substitution spans.
-    """
     table = defaultdict(Counter)
     totals = defaultdict(int)
 
     for issue in issues:
         if issue.get("tag") != "S2X":
             continue
-
         style = issue["style"]
         gt = issue.get("gt_text", "") or ""
         htr = issue.get("htr_text", "") or ""
-
         for g, h in zip(gt, htr):
             if g != h:
                 table[style][(g, h)] += 1
@@ -816,17 +954,16 @@ def char_confusions_by_style(
 
     out: dict[str, list[dict[str, Any]]] = {}
     for style in sorted(table):
-        rows = []
-        for (g, h), count in table[style].most_common(top_n):
-            rows.append({
+        out[style] = [
+            {
                 "style": style,
                 "gt": g,
                 "htr": h,
                 "count": count,
-                "pct_style_char_confusions": count / totals[style] if totals[style] else 0.0,
-            })
-        out[style] = rows
-
+                "pct_style_char_confusions": safe_div(count, totals[style]),
+            }
+            for (g, h), count in table[style].most_common(top_n)
+        ]
     return out
 
 
@@ -834,51 +971,32 @@ def bigram_confusions_by_style(
     issues: list[dict[str, Any]],
     top_n: int = 20,
 ) -> dict[str, list[dict[str, Any]]]:
-    """
-    Top bigram confusions by style.
-
-    Conservative definition
-    -----------------------
-    Use Step 2 substitution spans where the GT span normalises to exactly two
-    characters after whitespace removal. The HTR output can be length 1+.
-
-    Limitation
-    ----------
-    This captures only a conservative subset of transition-level errors. It does
-    not recover every possible bigram/ligature failure from the full alignment path.
-    """
     table = defaultdict(Counter)
     totals = defaultdict(int)
 
     for issue in issues:
         if issue.get("tag") != "S2X":
             continue
-
         style = issue["style"]
         gt = re.sub(r"\s+", "", (issue.get("gt_text") or ""))
         htr = re.sub(r"\s+", "", (issue.get("htr_text") or ""))
-
-        if len(gt) != 2:
+        if len(gt) != 2 or not htr:
             continue
-        if not htr:
-            continue
-
         table[style][(gt, htr)] += 1
         totals[style] += 1
 
     out: dict[str, list[dict[str, Any]]] = {}
     for style in sorted(table):
-        rows = []
-        for (gt_bg, htr_out), count in table[style].most_common(top_n):
-            rows.append({
+        out[style] = [
+            {
                 "style": style,
                 "gt_bigram": gt_bg,
                 "htr_out": htr_out,
                 "count": count,
-                "pct_style_bigram_confusions": count / totals[style] if totals[style] else 0.0,
-            })
-        out[style] = rows
-
+                "pct_style_bigram_confusions": safe_div(count, totals[style]),
+            }
+            for (gt_bg, htr_out), count in table[style].most_common(top_n)
+        ]
     return out
 
 
@@ -888,24 +1006,15 @@ def word_confusions_by_style(
     top_n: int = 20,
     min_len: int = MIN_WORD_CONFUSION_LEN,
 ) -> dict[str, list[dict[str, Any]]]:
-    """
-    Top word-level substitution confusions by style.
-
-    Short function-word noise is reduced by:
-    - stopword filtering
-    - minimum token-length filtering
-    """
     table = defaultdict(Counter)
     totals = defaultdict(int)
 
     for issue in issues:
         if issue.get("tag") != "S2X":
             continue
-
         style = issue["style"]
         gt = (issue.get("word_gt") or "").strip().lower()
         htr = (issue.get("word_htr") or "").strip().lower()
-
         if not gt or not htr:
             continue
         if gt in stopwords:
@@ -914,83 +1023,55 @@ def word_confusions_by_style(
             continue
         if gt == htr:
             continue
-
         table[style][(gt, htr)] += 1
         totals[style] += 1
 
     out: dict[str, list[dict[str, Any]]] = {}
     for style in sorted(table):
-        rows = []
-        for (gt_word, htr_word), count in table[style].most_common(top_n):
-            rows.append({
+        out[style] = [
+            {
                 "style": style,
                 "gt_word": gt_word,
                 "htr_word": htr_word,
                 "count": count,
-                "pct_style_word_confusions": count / totals[style] if totals[style] else 0.0,
-            })
-        out[style] = rows
-
+                "pct_style_word_confusions": safe_div(count, totals[style]),
+            }
+            for (gt_word, htr_word), count in table[style].most_common(top_n)
+        ]
     return out
 
 
 # ---------------------------------------------------------------------
-# Problematic-document views
+# Document ranking helpers
 # ---------------------------------------------------------------------
 
 def top_documents_overall(
     doc_rows: list[dict[str, Any]],
     top_n: int = 25,
 ) -> list[dict[str, Any]]:
-    """
-    Top documents overall by true edit burden
-    """
-    ranked = sorted(
+    return sorted(
         doc_rows,
-        key = lambda r: (-r["edits"], -r["cer_norm"], -r["logged_issues"], r["doc_id"]),
-    )
-    return ranked[:top_n]
+        key=lambda r: (-r["risk_score"], r["style"], r["doc_id"]),
+    )[:top_n]
 
 
 def per_style_document_blocks(
     doc_rows: list[dict[str, Any]],
     top_n: int = 10,
 ) -> dict[str, dict[str, list[dict[str, Any]]]]:
-    """
-    Prepare per-style document diagnostic blocks
-
-    Each style gets:
-    - top by edit burden
-    - top by logged issue count
-    - top by boundary burden
-    - all drift-flagged docs
-    """
     by_style = defaultdict(list)
     for row in doc_rows:
         by_style[row["style"]].append(row)
 
     out = {}
-
     for style in sorted(by_style):
         docs = by_style[style]
-
         out[style] = {
-            "top_edit_burden": sorted(
-                docs,
-                key = lambda r: (-r["edits"], -r["cer_norm"], r["doc_id"]),
-            )[:top_n],
-            "top_issue_count": sorted(
-                docs,
-                key = lambda r: (-r["logged_issues"], -r["S2_issues"], -r["edits"], r["doc_id"]),
-            )[:top_n],
-            "top_boundary_burden": sorted(
-                docs,
-                key = lambda r: (-r["boundary_pct_of_edits"], -r["boundary_events"], -r["edits"], r["doc_id"]),
-            )[:top_n],
-            "drift_docs": sorted(
-                [r for r in docs if r["drift_flag"]],
-                key = lambda r: (-r["s2_total"], -r["drift_skew"], -r["edits"], r["doc_id"]),
-            ),
+            "top_risk": sorted(docs, key=lambda r: (-r["risk_score"], r["doc_id"]))[:top_n],
+            "top_cer": sorted(docs, key=lambda r: (-r["cer_norm"], r["doc_id"]))[:top_n],
+            "top_structural_drift": sorted(docs, key=lambda r: (-r["structural_drift_ratio"], r["doc_id"]))[:top_n],
+            "lowest_coverage": sorted(docs, key=lambda r: (r["coverage"], r["doc_id"]))[:top_n],
+            "lowest_continuity": sorted(docs, key=lambda r: (r["continuity"], r["doc_id"]))[:top_n],
         }
 
     return out

@@ -1,14 +1,19 @@
 """
 report_html.py
 
-Script to do the following:
+HTML rendering helpers for the revised HTR corpus diagnostics report.
 
-- build HTML tables and sections
-- provide collapsible sections
-- initialise DataTables with sorting, searching, pagination, and CSV export
-- draw Lorenz curves in Plotly
-- provide formatting helpers for outputs
+This version is designed for the v7 report builder.  It keeps the helpers
+used by the earlier report, but updates the page wrapper, navigation, table
+styling, and Plotly layout support for the newer report structure:
 
+- corpus shape and style comparison;
+- line-structure integrity;
+- error concentration;
+- error ecology and recurrent confusion contexts;
+- structural topology plots and peak-position summaries;
+- risk-weighted stratification, document-status governance, and downstream status-index outputs;
+- appendices for metric definitions, index-derived risk stratification, and human review.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from __future__ import annotations
 from html import escape
 from itertools import count
 import json
+from typing import Any
 
 
 # ---------------------------------------------------------------------
@@ -29,49 +35,90 @@ _TABLE_COUNTER = count(1)
 # Formatting helpers
 # ---------------------------------------------------------------------
 
-def f_int(value: int | float) -> str:
+def f_int(value: int | float | None) -> str:
     """
-    Format an integer-like value with thousands separators.
+    Format an integer-like value using thousands separators.
     """
-    if isinstance(value, float) and value.is_integer():
-        value = int(value)
-    return f"{value:,}"
+    if value is None:
+        return ""
+    try:
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+        return f"{value:,}"
+    except (TypeError, ValueError):
+        return escape(str(value))
 
 
-def f_float(value: float, digits: int = 4) -> str:
+def f_float(value: float | int | None, digits: int = 4) -> str:
     """
     Format a float with a fixed number of decimal places.
     """
-    return f"{value:.{digits}f}"
+    if value is None:
+        return ""
+    try:
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return escape(str(value))
 
 
-def f_pct(value: float, digits: int = 2) -> str:
+def f_pct(value: float | int | None, digits: int = 2) -> str:
     """
     Format a proportion in [0, 1] as a percentage.
-    E.g. 0.1234 would be formatted as 12.34%
     """
-    return f"{value * 100:.{digits}f}%"
+    if value is None:
+        return ""
+    try:
+        return f"{float(value) * 100:.{digits}f}%"
+    except (TypeError, ValueError):
+        return escape(str(value))
 
 
-def f_pp(value: float, digits: int = 2) -> str:
+def f_pp(value: float | int | None, digits: int = 2) -> str:
     """
     Format a percentage-point difference.
-    Works on inputs already in percentage-point units.
-    E.g. 1.25 would be formatted as +1.25 pp
+    Input is already in percentage-point units.
     """
-    sign = "+" if value > 0 else ""
-    return f"{sign}{value:.{digits}f} pp"
+    if value is None:
+        return ""
+    try:
+        value = float(value)
+        sign = "+" if value > 0 else ""
+        return f"{sign}{value:.{digits}f} pp"
+    except (TypeError, ValueError):
+        return escape(str(value))
 
 
 # ---------------------------------------------------------------------
-# Builders for HTML report
+# Basic HTML builders
 # ---------------------------------------------------------------------
 
 def html_note(text: str) -> str:
     """
-    Render an informational block.
+    Render an informational note block. Text is escaped deliberately.
     """
     return f'<div class="note">{escape(text)}</div>'
+
+
+def html_warning(text: str) -> str:
+    """
+    Render a caution / limitations note block. Text is escaped deliberately.
+    """
+    return f'<div class="warning-note">{escape(text)}</div>'
+
+
+def html_small(text: str) -> str:
+    """
+    Render small muted helper text.
+    """
+    return f'<p class="small">{escape(text)}</p>'
+
+
+def html_badge(text: str, kind: str = "neutral") -> str:
+    """
+    Render a small badge. Useful for labels such as Stable, Review, High risk.
+    """
+    safe_kind = "".join(ch for ch in kind.lower() if ch.isalnum() or ch in {"-", "_"}) or "neutral"
+    return f'<span class="badge badge-{safe_kind}">{escape(text)}</span>'
 
 
 def html_table(
@@ -80,33 +127,32 @@ def html_table(
     caption: str | None = None,
     datatable: bool = True,
     csv_name: str | None = None,
+    wide: bool = True,
+    sticky_first_col: bool = True,
+    scroll_y: str = "520px",
+    page_length: int = 25,
 ) -> str:
     """
     Render an HTML table.
 
-    Parameters
-    ----------
-    headers:
-        Column headers.
-    rows:
-        Body rows, already formatted for display
-    caption:
-        Optional caption above table
-    datatable:
-        If True, the table is initialised with DataTables
-    csv_name:
-        Optional filename stem used by the in-browser CSV export button
-
-    Returns
-    -------
-    str
-        HTML string for the table.
+    The helper defaults to wide, scrollable DataTables because the report
+    intentionally includes several operational handoff tables with many fields.
     """
     table_id = f"tbl_{next(_TABLE_COUNTER)}"
-    class_attr = "report-table datatable" if datatable else "report-table"
 
+    classes = ["report-table"]
+    if datatable:
+        classes.append("datatable")
+    if wide:
+        classes.append("wide-table")
+    if sticky_first_col:
+        classes.append("sticky-first-col")
+
+    class_attr = " ".join(classes)
     caption_html = f"<caption>{escape(caption)}</caption>" if caption else ""
     export_attr = f'data-export-name="{escape(csv_name)}"' if csv_name else ""
+    scroll_attr = f'data-scroll-y="{escape(scroll_y)}"'
+    page_len_attr = f'data-page-length="{int(page_length)}"'
 
     thead = "".join(f"<th>{escape(str(h))}</th>" for h in headers)
 
@@ -117,8 +163,8 @@ def html_table(
 
     tbody = "".join(body_rows)
 
-    return f"""
-    <table id="{table_id}" class="{class_attr}" {export_attr}>
+    table_html = f"""
+    <table id="{table_id}" class="{class_attr}" {export_attr} {scroll_attr} {page_len_attr}>
       {caption_html}
       <thead>
         <tr>{thead}</tr>
@@ -129,10 +175,15 @@ def html_table(
     </table>
     """
 
+    if wide:
+        return f'<div class="table-scroll-wrap">{table_html}</div>'
+
+    return table_html
+
 
 def subsection(title: str, content: str) -> str:
     """
-    Render a subsection inside subsection in the report
+    Render a subsection inside a report section.
     """
     return f"""
     <div class="subsection">
@@ -144,16 +195,7 @@ def subsection(title: str, content: str) -> str:
 
 def section(title: str, content: str, open_by_default: bool = False) -> str:
     """
-    Render a collapsible report section
-
-    Parameters
-    ----------
-    title:
-        Summary text shown in the collapsible header
-    content:
-        HTML body for the section
-    open_by_default:
-        If True, the section is expanded on page load
+    Render a collapsible report section.
     """
     open_attr = " open" if open_by_default else ""
     return f"""
@@ -167,68 +209,91 @@ def section(title: str, content: str, open_by_default: bool = False) -> str:
 
 
 # ---------------------------------------------------------------------
-# Plot helpers
+# Optional plot helpers
 # ---------------------------------------------------------------------
 
-def lorenz_plot_block(lorenz_data: dict[str, list[tuple[float, float]]]) -> str:
+def plotly_block(
+    div_id: str,
+    traces: list[dict[str, Any]],
+    layout: dict[str, Any] | None = None,
+    height: int = 420,
+    title: str | None = None,
+) -> str:
     """
-    Render one Lorenz curve in Plotly per style
-
-    Parameters
-    ----------
-    lorenz_data:
-        Mapping:
-            style -> list of (cumulative_doc_share, cumulative_edit_share)
-
-    Returns
-    -------
-    str
-        HTML block containing one plot per style.
+    Generic Plotly block used by report builders that prefer to create traces
+    in the builder rather than in this helper module.
     """
-    blocks = ['<div class="lorenz-grid">']
+    layout = layout or {}
+    safe_div_id = "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in div_id)
+    title_html = f"<div><strong>{escape(title)}</strong></div>" if title else ""
 
-    for style in sorted(lorenz_data):
-        plot_id = f"lorenz_{style.replace(' ', '_').replace('/', '_')}"
-        points = lorenz_data[style]
+    return f"""
+    <div class="plot-box">
+      {title_html}
+      <div id="{safe_div_id}" style="height:{int(height)}px;"></div>
+      <script>
+        Plotly.newPlot(
+          "{safe_div_id}",
+          {json.dumps(traces)},
+          {json.dumps(layout)},
+          {{responsive: true}}
+        );
+      </script>
+    </div>
+    """
 
-        xs = [x for x, _ in points]
-        ys = [y for _, y in points]
 
-        blocks.append(f"""
-        <div class="plot-box">
-          <div><strong>{escape(style)}</strong></div>
-          <div id="{plot_id}" style="height:360px;"></div>
-          <script>
-            Plotly.newPlot(
-              "{plot_id}",
-              [
-                {{
-                  x: {json.dumps(xs)},
-                  y: {json.dumps(ys)},
-                  mode: "lines",
-                  name: "Lorenz curve"
-                }},
-                {{
-                  x: [0, 1],
-                  y: [0, 1],
-                  mode: "lines",
-                  name: "Equality line"
-                }}
-              ],
-              {{
-                margin: {{l: 50, r: 20, t: 20, b: 50}},
-                xaxis: {{title: "Cumulative share of documents"}},
-                yaxis: {{title: "Cumulative share of edits", range: [0, 1]}},
-                showlegend: true
-              }},
-              {{responsive: true}}
-            );
-          </script>
-        </div>
-        """)
+def boxplot_block(
+    distribution_data: dict[str, dict[str, list[float]]],
+    metric_labels: dict[str, str] | None = None,
+) -> str:
+    """
+    Render one Plotly boxplot per metric.
+    """
+    metric_labels = metric_labels or {}
+    blocks = ['<div class="plot-grid">']
+
+    for metric in sorted(distribution_data):
+        plot_id = f"box_{metric.replace(' ', '_').replace('/', '_')}"
+        style_map = distribution_data[metric]
+
+        traces = []
+        for style in sorted(style_map):
+            traces.append({
+                "y": style_map[style],
+                "type": "box",
+                "name": style,
+                "boxpoints": "outliers",
+            })
+
+        title = metric_labels.get(metric, metric)
+
+        blocks.append(plotly_block(
+            div_id=plot_id,
+            traces=traces,
+            layout={
+                "margin": {"l": 60, "r": 20, "t": 20, "b": 90},
+                "yaxis": {"title": title},
+                "xaxis": {"tickangle": -30},
+                "showlegend": False,
+            },
+            height=420,
+            title=title,
+        ))
 
     blocks.append("</div>")
     return "".join(blocks)
+
+
+# For backwards compatibility just in case older report builders call it.
+def lorenz_plot_block(lorenz_data: dict[str, list[tuple[float, float]]]) -> str:
+    """
+    Deprecated Lorenz helper retained for backwards compatibility.
+    """
+    return html_note(
+        "Lorenz curves are omitted from the refactored report. "
+        "Use concentration bars and exported concentration tables instead."
+    )
 
 
 # ---------------------------------------------------------------------
@@ -237,7 +302,7 @@ def lorenz_plot_block(lorenz_data: dict[str, list[tuple[float, float]]]) -> str:
 
 def html_page(title: str, body: str) -> str:
     """
-    Builds the full HTML page
+    Build the full HTML page.
     """
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -247,11 +312,13 @@ def html_page(title: str, body: str) -> str:
 
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.dataTables.min.css">
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
 <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 
@@ -264,6 +331,11 @@ def html_page(title: str, body: str) -> str:
     --muted: #606770;
     --accent: #214f8b;
     --note: #eef5ff;
+    --warning: #fff8e6;
+    --warning-accent: #d99a00;
+    --header: #eef1f5;
+    --table-header: #f0f2f5;
+    --sticky-bg: #ffffff;
   }}
 
   body {{
@@ -282,6 +354,10 @@ def html_page(title: str, body: str) -> str:
     margin-bottom: 8px;
   }}
 
+  a {{
+    color: var(--accent);
+  }}
+
   .report-section {{
     border: 1px solid var(--border);
     background: var(--panel);
@@ -295,7 +371,7 @@ def html_page(title: str, body: str) -> str:
     font-size: 1.1rem;
     font-weight: 700;
     padding: 14px 18px;
-    background: #eef1f5;
+    background: var(--header);
     list-style: none;
   }}
 
@@ -316,45 +392,15 @@ def html_page(title: str, body: str) -> str:
     border-left: 4px solid var(--accent);
     padding: 10px 12px;
     margin: 8px 0 14px 0;
-    line-height: 1.4;
+    line-height: 1.45;
   }}
 
-  .report-table {{
-    width: 100%;
-    border-collapse: collapse;
-    margin: 10px 0 18px 0;
-    background: white;
-  }}
-
-  .report-table caption {{
-    caption-side: top;
-    text-align: left;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }}
-
-  .report-table th,
-  .report-table td {{
-    border: 1px solid #e4e6eb;
-    padding: 6px 8px;
-    vertical-align: top;
-  }}
-
-  .report-table th {{
-    background: #f0f2f5;
-  }}
-
-  .lorenz-grid {{
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }}
-
-  .plot-box {{
-    border: 1px solid var(--border);
-    background: white;
-    border-radius: 8px;
-    padding: 10px;
+  .warning-note {{
+    background: var(--warning);
+    border-left: 4px solid var(--warning-accent);
+    padding: 10px 12px;
+    margin: 8px 0 14px 0;
+    line-height: 1.45;
   }}
 
   .small {{
@@ -372,22 +418,138 @@ def html_page(title: str, body: str) -> str:
 
   .topnav ul {{
     margin: 8px 0 0 18px;
+    columns: 2;
   }}
 
   .topnav li {{
     margin-bottom: 4px;
+    break-inside: avoid;
+  }}
+
+  .badge {{
+    display: inline-block;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 0.82rem;
+    background: #f4f6f8;
+    white-space: nowrap;
+  }}
+
+  .badge-high, .badge-severe {{ background: #ffeceb; border-color: #ffb3ad; }}
+  .badge-medium, .badge-moderate {{ background: #fff8e6; border-color: #ffd36a; }}
+  .badge-low, .badge-stable {{ background: #ecf8ef; border-color: #9ad0a5; }}
+  .badge-review {{ background: #fff8e6; border-color: #ffd36a; }}
+  .badge-exclude {{ background: #ffeceb; border-color: #ffb3ad; }}
+
+  .table-scroll-wrap {{
+    width: 100%;
+    overflow-x: auto;
+    margin: 10px 0 18px 0;
+  }}
+
+  .report-table {{
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    font-size: 0.93rem;
+  }}
+
+  .report-table caption {{
+    caption-side: top;
+    text-align: left;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }}
+
+  .report-table th,
+  .report-table td {{
+    border: 1px solid #e4e6eb;
+    padding: 6px 8px;
+    vertical-align: top;
+    white-space: nowrap;
+  }}
+
+  .report-table th {{
+    background: var(--table-header);
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }}
+
+  .report-table.sticky-first-col th:first-child,
+  .report-table.sticky-first-col td:first-child {{
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--sticky-bg);
+    box-shadow: 2px 0 3px rgba(0, 0, 0, 0.06);
+  }}
+
+  .report-table.sticky-first-col th:first-child {{
+    z-index: 4;
+    background: var(--table-header);
+  }}
+
+  div.dataTables_wrapper {{
+    width: 100%;
+  }}
+
+  div.dataTables_scrollBody {{
+    border-bottom: 1px solid var(--border);
+  }}
+
+  .dt-buttons {{
+    margin-bottom: 8px;
+  }}
+
+  .plot-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+    gap: 16px;
+  }}
+
+  .plot-box {{
+    border: 1px solid var(--border);
+    background: white;
+    border-radius: 8px;
+    padding: 10px;
+    margin: 10px 0 16px 0;
+  }}
+
+  code {{
+    background: #f4f4f5;
+    border: 1px solid #e4e6eb;
+    border-radius: 4px;
+    padding: 1px 4px;
+  }}
+
+  @media (max-width: 900px) {{
+    body {{ margin: 18px; }}
+    .topnav ul {{ columns: 1; }}
+    .plot-grid {{ grid-template-columns: 1fr; }}
   }}
 </style>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {{
   $('table.datatable').each(function() {{
-    const exportName = $(this).data('export-name') || 'table';
-    $(this).DataTable({{
-      pageLength: 25,
+    const $table = $(this);
+    const exportName = $table.data('export-name') || 'table';
+    const scrollY = $table.data('scroll-y') || '520px';
+    const pageLength = parseInt($table.data('page-length') || '25', 10);
+    const isWide = $table.hasClass('wide-table');
+
+    $table.DataTable({{
+      pageLength: pageLength,
+      lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'All']],
       autoWidth: false,
       order: [],
-      dom: 'Bfrtip',
+      scrollX: isWide,
+      scrollY: isWide ? scrollY : '',
+      scrollCollapse: true,
+      fixedHeader: true,
+      dom: 'Blfrtip',
       buttons: [
         {{
           extend: 'csvHtml5',
@@ -403,7 +565,12 @@ document.addEventListener("DOMContentLoaded", function() {{
       if (el.open) {{
         setTimeout(function() {{
           $.fn.dataTable.tables({{visible: true, api: true}}).columns.adjust();
-        }}, 25);
+          if (window.Plotly) {{
+            el.querySelectorAll('.js-plotly-plot').forEach(function(plot) {{
+              Plotly.Plots.resize(plot);
+            }});
+          }}
+        }}, 80);
       }}
     }});
   }});
@@ -417,11 +584,18 @@ document.addEventListener("DOMContentLoaded", function() {{
   <strong>Report structure</strong>
   <ul>
     <li>Metadata and analytical scope</li>
-    <li>Corpus description and issue overview</li>
-    <li>Primary style comparison</li>
-    <li>Error concentration and problematic documents</li>
-    <li>Error drivers by style: character, bigram, and word</li>
-    <li>Per-style document diagnostics</li>
+    <li>Corpus shape and issue context</li>
+    <li>Style behaviour and clean-subset potential</li>
+    <li>Line-structure integrity and segmentation risk</li>
+    <li>Error concentration and high-burden subsets</li>
+    <li>Error ecology and recurrent confusion contexts</li>
+    <li>Structural topology of transcription instability</li>
+    <li>Risk Weighted Stratification by Style</li>
+    <li>Document Status Governance</li>
+    <li>Downstream use of the Document Status Index</li>
+    <li>Appendix A. Metric definitions</li>
+    <li>Appendix B. Index-Derived Risk Stratification</li>
+    <li>Appendix C. Human Review Protocol</li>
   </ul>
 </div>
 
@@ -437,6 +611,6 @@ document.addEventListener("DOMContentLoaded", function() {{
 
 def csv_ready_rows(rows: list[list[object]]) -> list[list[object]]:
     """
-    Convert rendered-table rows into plain string values to write to CSV
+    Convert rendered-table rows into plain string values to write to CSV.
     """
     return [[str(cell) for cell in row] for row in rows]
