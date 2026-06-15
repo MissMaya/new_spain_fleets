@@ -181,7 +181,7 @@ This document interprets the results of the current corpus report. The analysis 
 <nav>
 <strong>Sections</strong>
 <ul>
-<li><a href="#overview">1. Summary</a></li>
+<li><a href="#overview">1. Corpus snapshot</a></li>
 <li><a href="#shape">2. Corpus shape and distribution of issues</a></li>
 <li><a href="#style">3. Style behaviour and clean-subset potential</a></li>
 <li><a href="#line">4. Line-structure integrity</a></li>
@@ -195,22 +195,22 @@ This document interprets the results of the current corpus report. The analysis 
 </nav>
 
 <section id="overview">
-<h2>1. Overall corpus interpretation</h2>
-<p class="kicker">The report shows that the corpus is heterogeneous in size, style composition, transcription stability, and error behaviour.</p>
+<h2>1. Corpus snapshot</h2>
+<p class="kicker">The report shows that the corpus is heterogeneous in style composition, transcription stability, and error behaviour.</p>
 
 <ul>
 <li>The training corpus contains <strong>2,068 documents</strong>, with <strong>489 held out as test documents</strong>.</li>
 <li>The training material contains <strong>2,335,229 normalised reference characters</strong>, <strong>567,449 tokens</strong>, and <strong>69,928 reference lines</strong>.</li>
-<li>The mean normalised CER is <strong>0.160429</strong>, while the median normalised CER is <strong>0.142685</strong>. The higher mean indicates that the corpus contains a high-error tail rather than a uniform error distribution.</li>
-<li>The mean WER is much higher at <strong>0.365346</strong>, confirming that character-level divergence compounds into substantial word-level disruption.</li>
-<li>Logged issue evidence is overwhelmingly concentrated in GT–HTR comparison: <strong>931,084 Stage 2 issues</strong>, representing <strong>98.57%</strong> of all logged issues. By contrast, Stage 1 surface anomalies account for only <strong>0.16%</strong>, and Stage 3 orthographic violations for <strong>1.27%</strong>.</li>
+<li>The mean normalised CER is <strong>0.16</strong>, while the median normalised CER is <strong>0.14</strong>. The higher mean indicates that the error distribution in the corpus is not uniformly distributed but is actually skewed with a high-error tail.</li>
+<li>The mean WER is significantly higher than the comparative CER at <strong>0.37</strong>, suggesting that character-level divergence compounds into substantial word-level disruption.</li>
+<li>Issues are overwhelmingly concentrated in the metrics requiring GT-HTR comparison, accounting for <strong>98.57%</strong> of all logged issues. By contrast, surface anomalies account for only <strong>0.16%</strong> of all logged issues, and orthographic violations for the remaining <strong>1.27%</strong>.</li>
 </ul>
 
 <div class="box interpretation">
 <h3>Overall interpretation</h3>
 <ul>
-<li>The main problem is not surface cleaning. It is the structural relationship between HTR output and GT transcription.</li>
-<li>The difference between mean and median CER, together with the concentration statistics discussed later, shows that instability is unevenly distributed across documents.</li>
+<li>The main problem is not surface cleaning or orthographic errors. The majority of errors occur at document structural level and are surfaced initially through HTR-GT comparison.</li>
+<li>The difference between mean and median CER, together with the concentration statistics discussed further down, shows that instability is unevenly distributed across documents.</li>
 <li>The corpus should therefore be treated as a mixed-quality, style-conditioned training environment, not as a single homogeneous dataset.</li>
 </ul>
 </div>
@@ -219,7 +219,8 @@ This document interprets the results of the current corpus report. The analysis 
 <h3>Fine-tuning takeaway</h3>
 <ul>
 <li>The fine-tuning pipeline should not ingest the corpus uniformly.</li>
-<li>The first operational split should be by <strong>style</strong>, followed by risk band, continuity, IDR, and line-structure status.</li>
+<li>The first operational split should be by style.</li>
+<li>Within a given style, metrics such as CER, IDR, and continuity should be used to allocate documents to a risk banding, as has been achieved through the construction of the style-stratifed risk index</li>
 <li>Low-risk documents should form the stable supervision baseline; high-risk documents should be isolated for review, stress-testing, or later-stage robustness training.</li>
 </ul>
 </div>
@@ -238,16 +239,16 @@ This document interprets the results of the current corpus report. The analysis 
 <h2>2. Corpus shape and issue context</h2>
 
 <ul>
-<li>The corpus is heavily weighted toward <strong>procesal</strong>, with <strong>893 documents</strong>, or <strong>43.18%</strong> of the training corpus.</li>
-<li><strong>Encadenada</strong> contributes <strong>579 documents</strong> (<strong>28.00%</strong>), while <strong>italica_cursiva</strong> contributes <strong>397 documents</strong> (<strong>19.20%</strong>).</li>
-<li>The two redonda-derived categories are much smaller: <strong>pseudo_redonda</strong> has <strong>122 documents</strong> (<strong>5.90%</strong>) and <strong>redonda</strong> has <strong>77 documents</strong> (<strong>3.72%</strong>).</li>
+<li>The corpus is heavily weighted towards <strong>Procesal</strong>, with <strong>893 documents</strong>, or <strong>43.18%</strong> of the training corpus.</li>
+<li><strong>Encadenada</strong> contributes <strong>579 documents</strong> (<strong>28.00%</strong>), while <strong>Italica Cursiva</strong> contributes <strong>397 documents</strong> (<strong>19.20%</strong>).</li>
+<li>The two Redonda-derived categories are much smaller: <strong>Pseudo Redonda</strong> has <strong>122 documents</strong> (<strong>5.90%</strong>) and <strong>Redonda</strong> has <strong>77 documents</strong> (<strong>3.72%</strong>).</li>
 <li>Procesal is not only the largest style by document count; it also contains <strong>1,332,584 characters</strong>, approximately <strong>45.9%</strong> of the style-level character total reported in the geometry table.</li>
-<li>Line geometry differs by style. Redonda has the longest median line length at <strong>56 characters</strong>, followed by italica_cursiva at <strong>52</strong>, procesal at <strong>46</strong>, pseudo_redonda at <strong>42</strong>, and encadenada at <strong>33</strong>.</li>
+<li>Line geometry differs by style. Redonda has the longest median line length at <strong>56 characters</strong>, followed by Italica Cursiva at <strong>52</strong>, Procesal at <strong>46</strong>, Pseudo Redonda at <strong>42</strong>, and finally Encadenada at <strong>33</strong>.</li>
 <li>Issue burden is not proportional to document count:
   <ul>
-  <li>Procesal accounts for <strong>43.18%</strong> of documents but <strong>47.23%</strong> of logged issues, an overweight of <strong>+4.05 percentage points</strong>.</li>
-  <li>Italica_cursiva accounts for <strong>19.20%</strong> of documents but <strong>22.10%</strong> of issues, an overweight of <strong>+2.90 percentage points</strong>.</li>
-  <li>Encadenada accounts for <strong>28.00%</strong> of documents but only <strong>22.56%</strong> of issues, an underweight of <strong>-5.43 percentage points</strong>.</li>
+  <li>Procesal accounts for <strong>43.18%</strong> of documents but <strong>47.23%</strong> of logged issues, making it overweight in error representation by <strong>+4.05 percentage points</strong>.</li>
+  <li>Italica Cursiva accounts for <strong>19.20%</strong> of documents but <strong>22.10%</strong> of issues, making it overweight by <strong>+2.90 percentage points</strong>.</li>
+  <li>Encadenada accounts for <strong>28.00%</strong> of documents but only <strong>22.56%</strong> of issues, making it underweight by <strong>-5.43 percentage points</strong>.</li>
   </ul>
 </li>
 </ul>
@@ -255,9 +256,9 @@ This document interprets the results of the current corpus report. The analysis 
 <div class="box interpretation">
 <h3>Overall interpretation</h3>
 <ul>
-<li>Style labels correspond to measurable differences in corpus shape, not merely palaeographic description.</li>
+<li>The errors observed across styles vary markedly.</li>
 <li>Procesal is the most consequential style operationally because it is both large and issue-heavy.</li>
-<li>Encadenada is large but relatively underweight in logged issues, meaning it may provide more stable material than its raw size alone would suggest.</li>
+<li>Encadenada is large but relatively underweight in logged issues, meaning that it may provide more stable material than its raw size alone would suggest.</li>
 <li>Redonda is small, but its longer line structure and low error profile make it a useful clean reference category.</li>
 </ul>
 </div>
@@ -276,7 +277,7 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>Style should be retained as document and chunk metadata in the vector store.</li>
 <li>Chunking policies may need to differ by style because line length and transcription stability differ materially.</li>
-<li>Redonda and pseudo_redonda may support cleaner retrieval pools; procesal and italica_cursiva require stronger quality gating.</li>
+<li>Redonda and Pseudo Redonda may support cleaner retrieval pools; Procesal and Italica Cursiva require stronger quality gating.</li>
 </ul>
 </div>
 </section>
