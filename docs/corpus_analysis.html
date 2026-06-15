@@ -339,15 +339,17 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>Line-structure integrity is generally strong across the corpus: each style has at least <strong>99.18%</strong> stable adjusted line structure.</li>
 <li>Redonda is perfectly stable on this measure: <strong>100.00%</strong> stable line structure and <strong>0.00%</strong> severe line instability.</li>
-<li>Procesal has the highest unmatched HTR blank incidence at <strong>1.01%</strong> of documents, followed by italica_cursiva at <strong>0.76%</strong> and encadenada at <strong>0.69%</strong>.</li>
-<li>Severe line instability is rare but present in encadenada (<strong>0.17%</strong>) and procesal (<strong>0.34%</strong>).</li>
-<li>Moderate instability appears in pseudo_redonda (<strong>0.82%</strong>), italica_cursiva (<strong>0.50%</strong>), procesal (<strong>0.34%</strong>), and encadenada (<strong>0.17%</strong>).</li>
+<li>Procesal has the highest unmatched HTR blank incidence at <strong>1.01%</strong> of documents, followed by Italica Cursiva at <strong>0.76%</strong> and Encadenada at <strong>0.69%</strong>.</li>
+<li>Severe line instability is rare in the current corpus but present in Encadenada (<strong>0.17%</strong>) and Procesal (<strong>0.34%</strong>).</li>
+<li>Moderate instability is minimally observable in Pseudo Redonda (<strong>0.82%</strong>), Italica Cursiva (<strong>0.50%</strong>), Procesal (<strong>0.34%</strong>), and Encadenada (<strong>0.17%</strong>).</li>
+<li>Note that this corpus has now been specifically cleaned to remove line differences between HTR and GT so the high levels of line structure integrity are not surprising</li>
+<li>However, this observation may not hold true as additional documents are added to the corpus.</li>
 </ul>
 
 <div class="box interpretation">
 <h3>Overall interpretation</h3>
 <ul>
-<li>The corpus is not broadly line-structure broken. That is important: most instability is not caused by simple line-count mismatch.</li>
+<li>Most instability in the corpus is not caused by simple line-count mismatch.</li>
 <li>However, the small number of line-structure failures is operationally significant because such failures can disproportionately damage training alignment and chunk boundaries.</li>
 <li>Line-structure risk should therefore be used as an escalation flag rather than as a dominant explanatory metric.</li>
 </ul>
@@ -389,7 +391,7 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>Procesal contributes the largest absolute edit burden: <strong>149,703 edits</strong>.</li>
 <li>Redonda has the smallest total edit burden (<strong>4,057 edits</strong>) but the highest concentration: Gini <strong>0.7193</strong>, with the top 10% of documents accounting for <strong>56.37%</strong> of edits.</li>
-<li>Pseudo_redonda also has strong concentration: Gini <strong>0.6291</strong>, with the top 10% accounting for <strong>41.52%</strong> of edits.</li>
+<li>Pseudo Redonda also has strong concentration: Gini <strong>0.6291</strong>, with the top 10% accounting for <strong>41.52%</strong> of edits.</li>
 <li>Procesal combines large scale and substantial concentration: Gini <strong>0.4968</strong>, with the top 10% contributing <strong>32.89%</strong> of edits.</li>
 </ul>
 
@@ -407,7 +409,7 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>High-burden documents should be explicitly tested as exclusion, down-weighting, or review candidates.</li>
 <li>Redonda should not be treated as uniformly clean; a small number of redonda outliers can materially distort training or evaluation.</li>
-<li>Procesal high-burden documents deserve priority review because they combine high absolute error volume with large corpus share.</li>
+<li>Procesal high-burden documents should be considered for priority review because they combine high absolute error volume with large corpus share.</li>
 </ul>
 </div>
 
