@@ -288,11 +288,11 @@ This document interprets the results of the current corpus report. The analysis 
 <table>
 <thead><tr><th>Style</th><th>Median CER</th><th>P90 CER</th><th>Median IDR</th><th>Median continuity</th><th>Clean &lt;1%</th><th>Clean &lt;5%</th><th>Dominant edit signal</th></tr></thead>
 <tbody>
-<tr><td>encadenada</td><td>0.173805</td><td>0.308041</td><td>0.086327</td><td>0.143377</td><td>16.06%</td><td>23.14%</td><td>balanced substitution/deletion</td></tr>
-<tr><td>italica_cursiva</td><td>0.151899</td><td>0.337884</td><td>0.076027</td><td>0.446377</td><td>0.50%</td><td>19.14%</td><td>deletion-heavy</td></tr>
-<tr><td>procesal</td><td>0.124396</td><td>0.372998</td><td>0.055827</td><td>0.420690</td><td>7.61%</td><td>27.55%</td><td>near-balanced substitution/deletion</td></tr>
-<tr><td>pseudo_redonda</td><td>0.066673</td><td>0.488000</td><td>0.043073</td><td>0.801904</td><td>14.75%</td><td>45.08%</td><td>deletion-heavy tail</td></tr>
-<tr><td>redonda</td><td>0.012696</td><td>0.105735</td><td>0.007278</td><td>0.952298</td><td>48.05%</td><td>74.03%</td><td>mostly stable, with outliers</td></tr>
+<tr><td>Encadenada</td><td>0.173805</td><td>0.308041</td><td>0.086327</td><td>0.143377</td><td>16.06%</td><td>23.14%</td><td>balanced substitution/deletion</td></tr>
+<tr><td>Italica Cursiva</td><td>0.151899</td><td>0.337884</td><td>0.076027</td><td>0.446377</td><td>0.50%</td><td>19.14%</td><td>deletion-heavy</td></tr>
+<tr><td>Procesal</td><td>0.124396</td><td>0.372998</td><td>0.055827</td><td>0.420690</td><td>7.61%</td><td>27.55%</td><td>near-balanced substitution/deletion</td></tr>
+<tr><td>Pseudo Redonda</td><td>0.066673</td><td>0.488000</td><td>0.043073</td><td>0.801904</td><td>14.75%</td><td>45.08%</td><td>deletion-heavy tail</td></tr>
+<tr><td>Redonda</td><td>0.012696</td><td>0.105735</td><td>0.007278</td><td>0.952298</td><td>48.05%</td><td>74.03%</td><td>mostly stable, with outliers</td></tr>
 </tbody>
 </table>
 
@@ -319,7 +319,7 @@ This document interprets the results of the current corpus report. The analysis 
 <li>Use Redonda as a clean benchmark pool, not as a proxy for the whole corpus.</li>
 <li>Use Pseudo Redonda carefully: its median is promising, but the P90 CER of <strong>0.488</strong> means high-risk documents must be filtered.</li>
 <li>Consider stratifying Procesal because it is too large and variable to treat as a single, homogeneous group.</li>
-<li>Encadenada should not be assumed safe simply because it is underweight in logged issues: its median continuity of <strong>0.143377</strong> is low and should be considered as a warning signal.</li>
+<li>Encadenada should not be assumed to be safe simply because it is underweight in logged issues: its median continuity of <strong>0.143377</strong> is low and should be considered as a warning signal.</li>
 </ul>
 </div>
 
@@ -349,7 +349,7 @@ This document interprets the results of the current corpus report. The analysis 
 <div class="box interpretation">
 <h3>Overall interpretation</h3>
 <ul>
-<li>Most instability in the corpus is not caused by simple line-count mismatch.</li>
+<li>Most instability in the corpus is not caused by simple line-count mismatches.</li>
 <li>However, the small number of line-structure failures is operationally significant because such failures can disproportionately damage training alignment and chunk boundaries.</li>
 <li>Line-structure risk should therefore be used as an escalation flag rather than as a dominant explanatory metric.</li>
 </ul>
@@ -380,11 +380,11 @@ This document interprets the results of the current corpus report. The analysis 
 <table>
 <thead><tr><th>Style</th><th>Total edits</th><th>Gini</th><th>Top 10% docs share</th><th>Top 5 docs share</th></tr></thead>
 <tbody>
-<tr><td>encadenada</td><td>90,583</td><td>0.4397</td><td>24.02%</td><td>2.84%</td></tr>
-<tr><td>italica_cursiva</td><td>71,078</td><td>0.4323</td><td>29.45%</td><td>6.60%</td></tr>
-<tr><td>procesal</td><td>149,703</td><td>0.4968</td><td>32.89%</td><td>3.33%</td></tr>
-<tr><td>pseudo_redonda</td><td>13,689</td><td>0.6291</td><td>41.52%</td><td>21.00%</td></tr>
-<tr><td>redonda</td><td>4,057</td><td>0.7193</td><td>56.37%</td><td>46.41%</td></tr>
+<tr><td>Encadenada</td><td>90,583</td><td>0.4397</td><td>24.02%</td><td>2.84%</td></tr>
+<tr><td>Italica Cursiva</td><td>71,078</td><td>0.4323</td><td>29.45%</td><td>6.60%</td></tr>
+<tr><td>Procesal</td><td>149,703</td><td>0.4968</td><td>32.89%</td><td>3.33%</td></tr>
+<tr><td>Pseudo Redonda</td><td>13,689</td><td>0.6291</td><td>41.52%</td><td>21.00%</td></tr>
+<tr><td>Redonda</td><td>4,057</td><td>0.7193</td><td>56.37%</td><td>46.41%</td></tr>
 </tbody>
 </table>
 
@@ -400,7 +400,7 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>Error is not evenly distributed across documents.</li>
 <li>Small styles can look clean overall while still containing a few documents that dominate their error burden.</li>
-<li>Redonda is the clearest example: it is clean in median terms, but its top 5 documents account for <strong>46.41%</strong> of edits in that style.</li>
+<li>Redonda is the clearest example of this phenomenon: it is clean in median terms, but its top 5 documents account for <strong>46.41%</strong> of edits in that style.</li>
 </ul>
 </div>
 
@@ -408,7 +408,7 @@ This document interprets the results of the current corpus report. The analysis 
 <h3>Fine-tuning takeaway</h3>
 <ul>
 <li>High-burden documents should be explicitly tested as exclusion, down-weighting, or review candidates.</li>
-<li>Redonda should not be treated as uniformly clean; a small number of redonda outliers can materially distort training or evaluation.</li>
+<li>Redonda should not be treated as uniformly clean as the small number of redonda outliers can materially distort training or evaluation.</li>
 <li>Procesal high-burden documents should be considered for priority review because they combine high absolute error volume with large corpus share.</li>
 </ul>
 </div>
