@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 import csv
 import json
 import math
+import re
 import statistics
 from collections import Counter, defaultdict
 from html import escape
@@ -50,7 +51,7 @@ TABLE_DIR = POSTHOC_DIR / "corpus_report_tables"
 LINE_COUNT_DIR = LOGS_DIR / "line_counts"
 
 CORPUS_NAME = "New Spain Fleets"
-PIPELINE_VERSION = "v8.0-topology-operation-parser-fix"
+PIPELINE_VERSION = "Unlocking 300 Years"
 REPORT_TITLE = "HTR Corpus Diagnostics Report"
 
 # The operational risk index is deliberately narrower than the full
@@ -99,6 +100,212 @@ RISK_BAND_TO_GOVERNANCE_STATUS = {
     "High": "Exclude",
 }
 
+# ---------------------------------------------------------------------
+# Editable report structure and note text
+# ---------------------------------------------------------------------
+# Edit section titles here. These titles are used both for the report headings
+# and for the linked Report structure box at the top of the HTML output.
+REPORT_SECTIONS: list[dict[str, str]] = [
+    {
+        "key": "metadata",
+        "title": "Key statistics and report scope",
+        "analysis_ref": "Corresponds to Analysis Report Sections 1–2: Corpus snapshot; Corpus shape and distribution of issues",
+    },
+    {
+        "key": "corpus",
+        "title": "Corpus shape and issue distribution",
+        "analysis_ref": "Corresponds to Analysis Report Section 2: Corpus shape and distribution of issues",
+    },
+    {
+        "key": "style",
+        "title": "Behaviour by style and clean-subset potential",
+        "analysis_ref": "Corresponds to Analysis Report Section 3: Behaviour by style and clean-subset potential",
+    },
+    {
+        "key": "line_structure",
+        "title": "Line-structure integrity",
+        "analysis_ref": "Corresponds to Analysis Report Section 4: Line-structure integrity",
+    },
+    {
+        "key": "concentration",
+        "title": "Error concentration",
+        "analysis_ref": "Corresponds to Analysis Report Section 5: Error concentration",
+    },
+    {
+        "key": "error_patterns",
+        "title": "Recurring error patterns and confusion contexts",
+        "analysis_ref": "Corresponds to Analysis Report Section 6: Recurring Error Patterns",
+    },
+    {
+        "key": "topology",
+        "title": "Structural topology of transcription errors",
+        "analysis_ref": "Corresponds to Analysis Report Section 7: Structural topology of transcription errors",
+    },
+    {
+        "key": "risk",
+        "title": "Risk-weighted stratification by style",
+        "analysis_ref": "Corresponds to Analysis Report Section 8: Operational governance and subset construction",
+    },
+    {
+        "key": "governance",
+        "title": "Document Status Index and governance",
+        "analysis_ref": "Corresponds to Analysis Report Section 8: Operational governance and subset construction",
+    },
+    {
+        "key": "downstream",
+        "title": "Downstream use of the Document Status Index",
+        "analysis_ref": "Corresponds to Analysis Report Section 9: Suggested document subsets for fine-tuning and RAG",
+    },
+    {
+        "key": "appendix_a",
+        "title": "Appendix A. Metric definitions",
+        "analysis_ref": "Supporting technical appendix",
+    },
+    {
+        "key": "appendix_b",
+        "title": "Appendix B. Risk Index construction",
+        "analysis_ref": "Supporting technical appendix for Analysis Report Section 8",
+    },
+    {
+        "key": "appendix_c",
+        "title": "Appendix C. Human review protocol",
+        "analysis_ref": "Supporting validation protocol",
+    },
+]
+REPORT_SECTION_TITLES: dict[str, str] = {row["key"]: row["title"] for row in REPORT_SECTIONS}
+REPORT_SECTION_REFS: dict[str, str] = {row["key"]: row.get("analysis_ref", "") for row in REPORT_SECTIONS}
+
+# Edit all blue explanatory note boxes here rather than inside the report body.
+REPORT_NOTES: dict[str, str] = {
+    "metadata_scope": (
+        "This report has two layers: a corpus-intelligence layer describing style behaviour and recurring error patterns, "
+        "and an operational governance layer for style-aware document status assignment. The risk-weighted stratification "
+        "uses a deliberately smaller metric set than the full diagnostics table."
+    ),
+    "corpus_composition": (
+        "How to read this section: large styles will dominate aggregate corpus behaviour, so style-level comparisons "
+        "are needed before making corpus-wide claims."
+    ),
+    "logged_issue_context": (
+        "How to read this section: if one style contributes more logged issues than its corpus share, that style may "
+        "require closer scrutiny; however, issue counts are context, not the main quality measure."
+    ),
+    "logged_issues_by_style": (
+        "This contextual view shows whether logged issue counts are over- or under-represented relative to corpus composition."
+    ),
+    "style_behaviour": (
+        "How to read this section: compare styles across several signals, not CER alone. CER and WER values are reported "
+        "as percentages throughout the display tables and charts. A style with lower CER but low continuity may still be "
+        "structurally risky for downstream use."
+    ),
+    "error_concentration": (
+        "How to read this section: high concentration means a small number of documents account for a large share of the "
+        "edit operations required to transform HTR into GT. Those documents are strong candidates for review or exclusion "
+        "testing even if the style as a whole looks manageable."
+    ),
+    "line_structure": (
+        "How to read this section: line-count deltas are structural signals, not bookkeeping. A severe adjusted line mismatch "
+        "can indicate unstable segmentation, which may compromise both training supervision and retrieval chunking."
+    ),
+    "line_structure_flags": (
+        "This table excludes documents with stable line structure and no unmatched HTR blanks. Use it as a review queue "
+        "for segmentation risk, especially when line mismatch co-occurs with high IDR or low continuity."
+    ),
+    "error_patterns": (
+        "How to read this section: recurring confusions show which transcription errors repeat within styles. They provide "
+        "diagnostic evidence for correction, model evaluation, and retrieval normalisation, but they are not part of the "
+        "risk-weighted stratification."
+    ),
+    "confusion_contexts": (
+        "For the top character and bigram confusions, this table lists the tokens or compact text contexts in which the "
+        "confusion most often occurs. This is a selective inventory for downstream fine-tuning and RAG review, not an "
+        "exhaustive lexical dump."
+    ),
+    "topology_no_positions": (
+        "No usable relative-position fields were found in the issue logs for this topology view. The section is retained "
+        "so the report can use it automatically once position metadata is logged."
+    ),
+    "topology": (
+        "How to read this section: topology shows where transcription errors occur within lines and documents. If deletions "
+        "or insertions peak near line endings or late-document regions, the problem is structural and local rather than just "
+        "a global CER issue. Topology is an evaluation diagnostic rather than a component of the main Risk Index."
+    ),
+    "risk": (
+        "How to read this section: the risk-weighted stratification is the starting point, not the final decision. Documents "
+        "are first ranked within style as Low, Medium, or High index-derived risk using CER, IDR, continuity risk, and adjusted "
+        "line delta. Supporting diagnostics such as confusions and topology explain behaviour but do not enter the composite score."
+    ),
+    "governance": (
+        "How to read this section: Document Status is the plain operational outcome. A document starts with its style-relative "
+        "risk band. It is then checked for structural danger signals: severe line instability, very low continuity, or high IDR. "
+        "If any of these are present, the document is escalated one level: Stable to Review, or Review to Exclude."
+    ),
+    "document_status_index": (
+        "The Document Status Index is the machine-readable handoff table for downstream use. It records each document's style, "
+        "index-derived risk band, structural escalation flags, and final status: Stable, Review, or Exclude."
+    ),
+    "downstream": (
+        "How to read this section: downstream ML and RAG processes should consume the same Document Status Index rather than "
+        "separate selection systems. Stable documents are provisionally suitable for downstream use; Review documents require "
+        "caution or human review; Exclude documents are structurally unreliable pending correction or adjudication."
+    ),
+}
+
+
+def report_anchor(key: str) -> str:
+    """Return the HTML anchor used by the report structure links."""
+    safe = "".join(ch.lower() if ch.isalnum() else "-" for ch in key).strip("-")
+    return f"section-{safe}"
+
+
+def note(key: str) -> str:
+    """Render an editable explanatory note from REPORT_NOTES."""
+    return html_note(REPORT_NOTES[key])
+
+
+def linked_report_structure() -> str:
+    """Render the report structure box with links matching REPORT_SECTIONS."""
+    items = "\n".join(
+        f'<li><a href="#{report_anchor(row["key"])}">{escape(row["title"])}</a></li>'
+        for row in REPORT_SECTIONS
+    )
+    return (
+        '<div class="topnav">\n'
+        '  <strong>Report structure</strong>\n'
+        '  <ul>\n'
+        f'    {items}\n'
+        '  </ul>\n'
+        '</div>\n'
+    )
+
+
+def analysis_reference(key: str) -> str:
+    """Render a small cross-reference to the companion analysis report."""
+    ref = REPORT_SECTION_REFS.get(key, "")
+    if not ref:
+        return ""
+    return (
+        '<p class="analysis-ref" '
+        'style="margin:0 0 12px;color:#667085;font-size:.92rem;font-style:italic;">'
+        f'{escape(ref)}</p>'
+    )
+
+
+def anchored_section(key: str, content: str, open_by_default: bool = False) -> str:
+    """Render a report section and attach an anchor used by the top navigation."""
+    content_with_ref = analysis_reference(key) + content
+    return f'<div id="{report_anchor(key)}"></div>' + section(REPORT_SECTION_TITLES[key], content_with_ref, open_by_default=open_by_default)
+
+
+def replace_default_topnav(page: str) -> str:
+    """Replace the static top navigation inserted by report_html.html_page."""
+    return re.sub(
+        r'<div class="topnav">.*?</div>\s*',
+        linked_report_structure(),
+        page,
+        count=1,
+        flags=re.S,
+    )
 
 
 # ---------------------------------------------------------------------
@@ -141,6 +348,11 @@ def write_dict_csv(
 
 def f_metric(value: float | int | None, digits: int = 6) -> str:
     return f_float(float(value or 0), digits)
+
+
+def f_metric_pct(value: float | int | None, digits: int = 2) -> str:
+    """Format a metric stored as a proportion as a percentage for display."""
+    return f_pct(float(value or 0), digits)
 
 
 def f_density(value: float | int | None) -> str:
@@ -564,7 +776,7 @@ def document_status_index_rows(doc_rows: list[dict[str, Any]]) -> list[list[obje
             r.get("escalation_flags", ""),
             r.get("governance_status", ""),
             f_score(r.get("risk_score", 0)),
-            f_metric(r.get("cer_norm", 0)),
+            f_metric_pct(r.get("cer_norm", 0)),
             f_metric(r.get("indel_disruption_rate", 0)),
             f_metric(r.get("continuity", 0)),
             f_int(r.get("adjusted_line_delta_abs", r.get("adjusted_line_delta", 0))),
@@ -713,9 +925,9 @@ def metadata_rows(
         ["Reference characters, normalised", f_int(corpus_summary.get("ref_chars_norm", 0))],
         ["Reference tokens, normalised", f_int(corpus_summary.get("tokens", 0))],
         ["Reference lines", f_int(corpus_summary.get("lines", 0))],
-        ["Mean normalised CER", f_float(number(corpus_summary.get("mean_cer_norm")), 6)],
-        ["Median normalised CER", f_float(number(corpus_summary.get("median_cer_norm")), 6)],
-        ["Mean normalised WER", f_float(number(corpus_summary.get("mean_wer_norm")), 6)],
+        ["Mean CER (%)", f_metric_pct(corpus_summary.get("mean_cer_norm"))],
+        ["Median CER (%)", f_metric_pct(corpus_summary.get("median_cer_norm"))],
+        ["Mean WER (%)", f_metric_pct(corpus_summary.get("mean_wer_norm"))],
         ["Logged S1 basic transcription anomalies", f_int(stage_overview.get("S1", 0))],
         ["Logged S3 orthographic violations", f_int(stage_overview.get("S3", 0))],
     ]
@@ -781,9 +993,9 @@ def style_intelligence_rows(rows: list[dict]) -> list[list[object]]:
         out.append([
             row["style"],
             f_int(row["docs"]),
-            f_metric(row["median_cer"]),
-            f_metric(row["p90_cer"]),
-            f_metric(row["median_wer"]),
+            f_metric_pct(row["median_cer"]),
+            f_metric_pct(row["p90_cer"]),
+            f_metric_pct(row["median_wer"]),
             f_metric(row["median_idr"]),
             f_metric(row["median_continuity"]),
             f_metric(row["median_adjusted_line_delta"]),
@@ -849,8 +1061,8 @@ def operational_document_rows(rows: list[dict]) -> list[list[object]]:
             f_int(row.get("line_count", 0)),
             f_density(row.get("basic_anomaly_density", 0)),
             f_density(row.get("orthographic_violation_density", 0)),
-            f_metric(row.get("cer_norm", 0)),
-            f_metric(row.get("wer_norm", 0)),
+            f_metric_pct(row.get("cer_norm", 0)),
+            f_metric_pct(row.get("wer_norm", 0)),
             f_metric(row.get("indel_disruption_rate", 0)),
             f_metric(row.get("continuity", 0)),
             f_int(row.get("adjusted_line_delta_abs", row.get("adjusted_line_delta", 0))),
@@ -875,7 +1087,7 @@ def top_risk_rows(rows: list[dict], top_n: int = 50) -> list[list[object]]:
             row.get("doc_id", ""),
             row.get("risk_band", ""),
             f_score(row.get("risk_score", 0)),
-            f_metric(row.get("cer_norm", 0)),
+            f_metric_pct(row.get("cer_norm", 0)),
             f_metric(row.get("indel_disruption_rate", 0)),
             f_metric(row.get("continuity", 0)),
             f_density(row.get("basic_anomaly_density", 0)),
@@ -924,7 +1136,10 @@ def plotly_div(div_id: str, traces: list[dict[str, Any]], layout: dict[str, Any]
 def boxplot_by_style(doc_rows: list[dict[str, Any]], metric: str, title: str, y_title: str) -> str:
     by_style: dict[str, list[float]] = defaultdict(list)
     for row in doc_rows:
-        by_style[str(row.get("style", "UNKNOWN"))].append(metric_value_for_index(row, metric) if metric == "continuity_risk" else number(row.get(metric)))
+        value = metric_value_for_index(row, metric) if metric == "continuity_risk" else number(row.get(metric))
+        if metric in {"cer_norm", "wer_norm"}:
+            value *= 100
+        by_style[str(row.get("style", "UNKNOWN"))].append(value)
     traces = []
     for style in sorted(by_style):
         traces.append({
@@ -1405,10 +1620,7 @@ def topology_profiles_json(
 
 def topology_plot(topology: dict[str, dict[str, list[float]]], title: str, div_prefix: str, bins: int = TOPOLOGY_BINS) -> str:
     if not topology:
-        return html_note(
-            "No usable relative-position fields were found in the issue logs for this topology view. "
-            "The section is retained so the report can use it automatically once position metadata is logged."
-        )
+        return note("topology_no_positions")
 
     labels = [bin_label(i, bins) for i in range(bins)]
     parts: list[str] = []
@@ -1441,7 +1653,7 @@ def topology_plot(topology: dict[str, dict[str, list[float]]], title: str, div_p
 def appendix_a_metric_definitions() -> str:
     return """
 <section id="appendix-a">
-<h2>Appendix A. Metric definitions and interpretation</h2>
+<h2>Appendix A. Metric definitions</h2>
 
 <p>
 This appendix defines the principal metrics used in the report.  The report
@@ -1459,7 +1671,7 @@ construction.
 <p><code>CER = (S + I + D) / N</code></p>
 <p>
 CER measures the proportion of characters that must be edited to transform the
-HTR text into the GT text.  <code>S</code> is substitutions, <code>I</code> is
+HTR text into the GT text. In the report display tables and plots, CER is shown as a percentage.  <code>S</code> is substitutions, <code>I</code> is
 insertions, <code>D</code> is deletions, and <code>N</code> is the number of
 normalised GT characters.
 </p>
@@ -1469,7 +1681,7 @@ normalised GT characters.
 <summary><strong>Word Error Rate (WER)</strong></summary>
 <p><code>WER = (S_w + I_w + D_w) / N_w</code></p>
 <p>
-WER measures word-level edit disagreement. It is useful as a higher-level
+WER measures word-level edit disagreement. In the report display tables, WER is shown as a percentage. It is useful as a higher-level
 usability signal, but it is less diagnostic than CER and alignment metrics for
 character-level HTR failure.
 </p>
@@ -1559,7 +1771,7 @@ def appendix_b_risk_index() -> str:
     )
     return f"""
 <section id="appendix-b">
-<h2>Appendix B. Index-Derived Risk Stratification</h2>
+<h2>Appendix B. Risk Index construction</h2>
 
 <h3>B1. Purpose</h3>
 <p>
@@ -1795,7 +2007,7 @@ def build_report() -> str:
     write_csv_table("logged_issue_stage_overview", stage_headers, stage_table_rows)
 
     style_headers = [
-        "Style", "Docs", "Median CER", "P90 CER", "Median WER",
+        "Style", "Docs", "Median CER (%)", "P90 CER (%)", "Median WER (%)",
         "Median IDR", "Median continuity", "Median adjusted line delta",
         "Stable line structure %", "Severe line instability %",
         "Median basic anomaly density", "Median orthographic violation density",
@@ -1826,14 +2038,14 @@ def build_report() -> str:
 
     document_status_headers = [
         "doc_id", "style", "Index-derived risk band", "Escalation flags", "Document status",
-        "Risk score", "CER", "IDR", "Continuity", "Adjusted line delta", "Line-structure band",
+        "Risk score", "CER (%)", "IDR", "Continuity", "Adjusted line delta", "Line-structure band",
     ]
     document_status_table_rows = document_status_index_rows(doc_rows)
     write_csv_table("document_status_index", document_status_headers, document_status_table_rows)
 
     op_headers = [
         "doc_id", "style", "ref_chars_norm", "token_count", "line_count",
-        "Basic anomaly density", "Orthographic violation density", "CER", "WER",
+        "Basic anomaly density", "Orthographic violation density", "CER (%)", "WER (%)",
         "IDR", "Continuity", "Adjusted line delta", "Line-structure band", "Line-structure flag",
         "Risk score", "Risk rank within style", "Risk band", "Escalation flags", "Document status",
     ]
@@ -1842,7 +2054,7 @@ def build_report() -> str:
 
     top_risk_headers = [
         "Style", "Risk rank within style", "doc_id", "Risk band", "Risk score",
-        "CER", "IDR", "Continuity", "Basic anomaly density",
+        "CER (%)", "IDR", "Continuity", "Basic anomaly density",
         "Orthographic violation density", "Adjusted line delta", "Line-structure band", "Document status",
     ]
     top_risk_table_rows = top_risk_rows(doc_rows, top_n=50)
@@ -1928,26 +2140,22 @@ def build_report() -> str:
     # -----------------------------------------------------------------
     sections: list[str] = []
 
-    sections.append(section(
-        "Metadata and analytical scope",
-        html_note(
-            "This report has two layers: a corpus-intelligence layer describing style behaviour and error ecology, "
-            "and an operational governance layer for style-aware document status assignment. "
-            "The risk-weighted stratification uses a deliberately smaller metric set than the full diagnostics table."
-        ) + html_table(meta_headers, meta_table_rows, datatable=False),
+    sections.append(anchored_section(
+        "metadata",
+        note("metadata_scope") + html_table(meta_headers, meta_table_rows, datatable=False),
         open_by_default=True,
     ))
 
     corpus_section = (
         subsection(
             "Training corpus composition by style",
-            html_note("How to read this section: large styles will dominate aggregate corpus behaviour, so style-level comparisons are needed before making corpus-wide claims.")
+            note("corpus_composition")
             + html_table(dist_headers, dist_table_rows, datatable=True, csv_name="training_corpus_by_style"),
         )
         + subsection("Training corpus geometry by style", html_table(geom_headers, geom_table_rows, datatable=True, csv_name="training_geometry_by_style"))
         + subsection(
             "Logged issue context",
-            html_note("How to read this section: if one style contributes more logged issues than its corpus share, that style may require closer scrutiny; however, issue counts are context, not the main quality measure.")
+            note("logged_issue_context")
             + html_table(stage_headers, stage_table_rows, datatable=True, csv_name="logged_issue_stage_overview"),
         )
     )
@@ -1957,56 +2165,41 @@ def build_report() -> str:
         write_csv_table("logged_issues_by_style", issue_style_headers, issue_style_table_rows)
         corpus_section += subsection(
             "Logged issues by style",
-            html_note("This contextual view shows whether logged issue burden is over- or under-represented relative to corpus composition.")
+            note("logged_issues_by_style")
             + html_table(issue_style_headers, issue_style_table_rows, datatable=True, csv_name="logged_issues_by_style"),
         )
-    sections.append(section("Corpus shape and issue context", corpus_section, open_by_default=True))
+    sections.append(anchored_section("corpus", corpus_section, open_by_default=True))
 
     style_section = (
-        html_note(
-            "How to read this section: compare styles across several signals, not CER alone. "
-            "For example, a style with lower CER but low continuity may still be structurally risky for downstream use."
-        )
+        note("style_behaviour")
         + subsection("Style intelligence overview", html_table(style_headers, style_table_rows, datatable=True, csv_name="style_intelligence_overview"))
-        + subsection("CER distribution by style", boxplot_by_style(doc_rows, "cer_norm", "CER distribution by style", "CER"))
+        + subsection("CER distribution by style", boxplot_by_style(doc_rows, "cer_norm", "CER distribution by style (%)", "CER (%)"))
         + subsection("Drift distribution by style", boxplot_by_style(doc_rows, "indel_disruption_rate", "Indel disruption by style", "IDR"))
         + subsection("Alignment coherence by style", boxplot_by_style(doc_rows, "continuity", "Continuity distribution by style", "Continuity"))
         + subsection("Clean-subset potential", grouped_clean_subset_bars(style_rows_raw))
     )
-    sections.append(section("Style behaviour and clean-subset potential", style_section, open_by_default=True))
-
-    concentration_section = (
-        html_note(
-            "How to read this section: high concentration means a small number of documents carry a large share of the error burden. "
-            "Those documents are strong candidates for review or exclusion testing even if the style as a whole looks manageable."
-        )
-        + subsection("Concentration summary by style", html_table(concentration_headers, concentration_table_rows, datatable=True, csv_name="error_concentration_by_style"))
-        + subsection("Top-decile edit burden by style", concentration_bars(concentration_raw))
-    )
-    sections.append(section("Error concentration and high-burden subsets", concentration_section, open_by_default=True))
+    sections.append(anchored_section("style", style_section, open_by_default=True))
 
     line_structure_section = (
-        html_note(
-            "How to read this section: line-count deltas are structural integrity signals, not bookkeeping. "
-            "A severe adjusted line mismatch can indicate unstable segmentation, which may compromise both training supervision and retrieval chunking."
-        )
+        note("line_structure")
         + subsection("Line-structure bands by style", line_structure_bars(line_structure_raw))
         + subsection("Line-structure summary by style", html_table(line_structure_headers, line_structure_table_rows, datatable=True, csv_name="line_structure_by_style"))
         + subsection(
             "Documents with line-structure flags",
-            html_note(
-                "This table excludes documents with stable line structure and no unmatched HTR blanks. "
-                "Use it as a review queue for segmentation risk, especially when line mismatch co-occurs with high IDR or low continuity."
-            )
+            note("line_structure_flags")
             + html_table(line_doc_headers, line_doc_table_rows, datatable=True, csv_name="line_structure_document_flags"),
         )
     )
-    sections.append(section("Line-structure integrity and segmentation risk", line_structure_section, open_by_default=True))
+    sections.append(anchored_section("line_structure", line_structure_section, open_by_default=True))
 
-    error_ecology_parts = [html_note(
-        "How to read this section: recurrent confusions show what kinds of textual corruption repeat within styles. "
-        "They are diagnostic evidence for later correction, model evaluation, and retrieval normalisation, but they are not part of the risk-weighted stratification."
-    )]
+    concentration_section = (
+        note("error_concentration")
+        + subsection("Concentration summary by style", html_table(concentration_headers, concentration_table_rows, datatable=True, csv_name="error_concentration_by_style"))
+        + subsection("Top-decile edit burden by style", concentration_bars(concentration_raw))
+    )
+    sections.append(anchored_section("concentration", concentration_section, open_by_default=True))
+
+    error_ecology_parts = [note("error_patterns")]
     if char_conf:
         error_ecology_parts.append(subsection("Top character confusions as bars", top_char_confusion_bars(char_conf, top_n=TOP_N_CONFUSIONS)))
 
@@ -2023,10 +2216,7 @@ def build_report() -> str:
         if context_rows:
             block += subsection(
                 f"{style} — recurrent confusion contexts",
-                html_note(
-                    "For the top character and bigram confusions, this table lists the tokens or compact text contexts in which the confusion most often occurs. "
-                    "This is a selective inventory for downstream fine-tuning and RAG review, not an exhaustive lexical dump."
-                )
+                note("confusion_contexts")
                 + html_table(
                     ["Kind", "Confusion", "Token/context", "Count"],
                     context_rows,
@@ -2039,13 +2229,10 @@ def build_report() -> str:
         if block:
             error_ecology_parts.append(subsection(f"Style block: {style}", block))
 
-    sections.append(section("Error ecology: character, bigram, word, and recurrent-context behaviour", "".join(error_ecology_parts), open_by_default=False))
+    sections.append(anchored_section("error_patterns", "".join(error_ecology_parts), open_by_default=False))
 
     topology_section = (
-        html_note(
-            "How to read this section: topology shows where errors occur within lines and documents. "
-            "If deletions or insertions peak near line endings or late-document regions, the problem is structural and local rather than just a global CER issue."
-        )
+        note("topology")
         + (subsection(
             "Topology summary by style",
             html_table(
@@ -2060,43 +2247,29 @@ def build_report() -> str:
         + subsection("Operation density by relative document position", topology_plot(document_topology, "operation density by relative document position", "topology_document", TOPOLOGY_BINS))
         + (subsection("Document-position topology table", html_table(["Style", "Operation", "Relative position bin", "Events per document"], document_topology_table_rows, datatable=True, csv_name="topology_document_position_by_style")) if document_topology_table_rows else "")
     )
-    sections.append(section("Structural topology of transcription instability", topology_section, open_by_default=False))
+    sections.append(anchored_section("topology", topology_section, open_by_default=False))
 
     risk_section = (
-        html_note(
-            "How to read this section: the risk-weighted stratification is the starting point, not the final decision. "
-            "Documents are first ranked within style as Low, Medium, or High index-derived risk using CER, IDR, continuity risk, and adjusted line delta. "
-            "Supporting diagnostics such as confusions and topology explain behaviour but do not enter the composite score."
-        )
+        note("risk")
         + subsection("Index-derived risk-band summary by style", html_table(risk_band_headers, risk_band_rows_out, datatable=True, csv_name="risk_band_summary_by_style"))
         + subsection("Operational document metrics table", html_table(op_headers, op_table_rows, datatable=True, csv_name="operational_document_metrics_display"))
         + subsection("Highest-risk documents under index-derived risk", html_table(top_risk_headers, top_risk_table_rows, datatable=True, csv_name="top_50_documents_by_simplified_risk"))
     )
-    sections.append(section("Risk Weighted Stratification by Style", risk_section, open_by_default=True))
+    sections.append(anchored_section("risk", risk_section, open_by_default=True))
 
     governance_section = (
-        html_note(
-            "How to read this section: Document Status is the plain operational outcome. "
-            "A document starts with its style-relative risk band. It is then checked for structural danger signals: severe line instability, very low continuity, or high IDR. "
-            "If any of these are present, the document is escalated one level: Stable to Review, or Review to Exclude."
-        )
+        note("governance")
         + subsection("Document status summary by style", html_table(status_headers, status_table_rows, datatable=True, csv_name="document_status_summary_by_style"))
         + subsection("Escalation flags", html_table(escalation_headers, escalation_table_rows, datatable=True, csv_name="document_status_escalation_flags"))
         + subsection(
             "Document Status Index",
-            html_note(
-                "The Document Status Index is the machine-readable handoff table for downstream use. "
-                "It records each document's style, index-derived risk band, structural escalation flags, and final status: Stable, Review, or Exclude."
-            )
+            note("document_status_index")
             + html_table(document_status_headers, document_status_table_rows, datatable=True, csv_name="document_status_index"),
         )
     )
-    sections.append(section("Document Status Governance", governance_section, open_by_default=True))
+    sections.append(anchored_section("governance", governance_section, open_by_default=True))
 
-    downstream_section = html_note(
-        "How to read this section: downstream ML and RAG processes should consume the same Document Status Index rather than separate selection systems. "
-        "Stable documents are provisionally suitable for downstream use; Review documents require caution or human review; Exclude documents are structurally unreliable pending correction or adjudication."
-    ) + """
+    downstream_section = note("downstream") + """
 <p>
 The status layer is intentionally task-agnostic. A machine-learning workflow may use Stable documents for clean supervision and Review documents for robustness experiments. A RAG workflow may index Stable documents first and treat Review documents as chunk-review candidates. In both cases, Exclude documents should be withheld from routine downstream use until reviewed or corrected.
 </p>
@@ -2104,14 +2277,14 @@ The status layer is intentionally task-agnostic. A machine-learning workflow may
 This report does not directly model semantic corruption. It therefore does not yet measure whether names, places, quantities, or events have been damaged in ways that affect retrieval answers. Instead, it identifies structural and transcriptional conditions under which semantic corruption is more likely: omission-heavy drift, low continuity, severe line mismatch, and recurrent character confusions.
 </p>
 """
-    sections.append(section("Downstream use of the Document Status Index", downstream_section, open_by_default=True))
+    sections.append(anchored_section("downstream", downstream_section, open_by_default=True))
 
-    sections.append(section("Appendix A. Metric definitions", appendix_a_metric_definitions(), open_by_default=False))
-    sections.append(section("Appendix B. Index-Derived Risk Stratification", appendix_b_risk_index(), open_by_default=False))
-    sections.append(section("Appendix C. Human Review Protocol", appendix_c_human_review_protocol(), open_by_default=False))
+    sections.append(anchored_section("appendix_a", appendix_a_metric_definitions(), open_by_default=False))
+    sections.append(anchored_section("appendix_b", appendix_b_risk_index(), open_by_default=False))
+    sections.append(anchored_section("appendix_c", appendix_c_human_review_protocol(), open_by_default=False))
 
     body = PLOTLY_CDN + "\n" + "\n".join(sections)
-    page = html_page(REPORT_TITLE, body)
+    page = replace_default_topnav(html_page(REPORT_TITLE, body))
 
     out_path = POSTHOC_DIR / "corpus_report.html"
     safe_write_text(page, out_path)
