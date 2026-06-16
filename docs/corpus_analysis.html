@@ -189,8 +189,8 @@ This document interprets the results of the current corpus report. The analysis 
 <li><a href="#ecology">6. Recurring Error Patterns</a></li>
 <li><a href="#topology">7. Structural topology of transcription errors</a></li>
 <li><a href="#governance">8. Operational governance and subset construction</a></li>
-<li><a href="#handoff">9. Suggested document subsets</a></li>
-<li><a href="#critical">10. Critical cautions</a></li>
+<li><a href="#handoff">9. Suggested document subsets for fine-tuning and RAG</a></li>
+<li><a href="#critical">10. Important considerations</a></li>
 </ul>
 </nav>
 
@@ -635,41 +635,41 @@ This document interprets the results of the current corpus report. The analysis 
 </section>
 
 <section id="critical">
-<h2>10. Critical cautions and academic interpretation</h2>
+<h2>10. Important considerations</h2>
 
 <div class="box critical">
 <h3>Critical cautions</h3>
 <ul>
-<li>The topology section currently uses issue events per document. It is highly informative, but should not be overinterpreted as direct semantic damage without further validation.</li>
-<li>Some recurrent confusions are historically plausible orthographic variants rather than straightforward model failures.</li>
-<li>The risk index is style-relative. A high-risk Redonda document is high-risk within redonda, not necessarily worse than every Procesal document in absolute terms.</li>
+<li>Topology diagnostics reveal where transcription problems occur and how they accumulate, but they do not, by themselves, indicate the extent to which meaning has been affected.</li>
+<li>Some recurrent confusions are historically plausible orthographic variants rather than straightforward model failures. This point alone highlights the importance of having a human-in-yhe-loop component to distinguish between genuine transcription errors and historical variations in spelling. </li>
+<li>The risk index is style-relative. A high-risk Redonda document is high-risk within Redonda, not necessarily worse than every Procesal document in absolute terms.</li>
 <li>Line-structure instability is rare, so it is best treated as an escalation signal rather than a major corpus-wide explanation.</li>
-<li>RAG implications remain partly prospective until the actual chunking strategy is known.</li>
+<li>RAG implications remain high level suggestions only until the actual chunking strategy is known.</li>
 </ul>
 </div>
 
 <div class="box interpretation">
 <h3>Overall interpretation</h3>
 <ul>
-<li>The report's strongest contribution is not simply that it provides more metrics than CER/WER.</li>
-<li>Its contribution is that it shows how historical HTR quality can be governed as a multi-dimensional, style-conditioned, structurally uneven data problem.</li>
-<li>This places the work closer to data-centric ML and corpus governance than to conventional OCR benchmarking alone.</li>
+<li>This report is not simply intended to generate more transcription metrics than CER and WER.</li>
+<li>Its contribution lies in showing that historical HTR quality is a multi-dimensional, style-dependent, and structurally uneven phenomenon that requires more nuanced forms of assessment.</li>
+<li>As such, the work sits closer to data-centric AI and corpus governance than to conventional HTR benchmarking alone.</li>
 </ul>
 </div>
 
 <div class="box ml">
 <h3>Fine-tuning takeaway</h3>
 <ul>
-<li>The next experimental step should compare fine-tuning outcomes across curated subset regimes: clean-only, balanced risk, high-risk excluded, and style-specific curriculum.</li>
-<li>Evaluation should report not only CER/WER but also whether IDR, continuity, deletion topology, and recurrent confusions improve.</li>
+<li>The next experimental stage should compare fine-tuning outcomes across different corpus curation strategies, including clean-only subsets, balanced risk subsets, and exclusion of high-risk documents.</li>
+<li>Evaluation should consider not only aggregate accuracy metrics such as CER and WER but also whether models reduce insertion-deletion disruption, improve transcription continuity, and lessen systematic error patterns and positional error concentrations.</li>
 </ul>
 </div>
 
 <div class="box rag">
 <h3>RAG takeaway</h3>
 <ul>
-<li>The RAG system should begin with document-level quality metadata and later move to chunk-level scoring once chunking is finalised.</li>
-<li>The most important RAG risks are omission, low continuity, line/document positional instability, and entity-bearing lexical corruption.</li>
+<li>The initial RAG pipeline should retain document-level quality metadata and later incorporate chunk-level risk assessment once chunking strategies have been finalised.</li>
+<li>For retrieval applications, the most consequential transcription failures are omissions, loss of textual correspondence, concentrated regional errors, and lexical corruption affecting names, places, dates, and other semantically important terms.</li>
 </ul>
 </div>
 </section>
