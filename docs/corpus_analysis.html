@@ -581,9 +581,9 @@ This document interprets the results of the current corpus report. The analysis 
 <div class="box rag">
 <h3>RAG takeaway</h3>
 <ul>
-<li>High-risk documents should not be indexed without warning metadata or chunk-level verification.</li>
-<li>Risk score should become a document-level retrieval confidence prior.</li>
-<li>Low-risk documents can seed the first reliable retrieval corpus while high-risk material is reviewed.</li>
+<li>High-risk documents should be flagged for verification before inclusion in retrieval pipelines.</li>
+<li>Risk classifications should be retained as document metadata and used to support risk-aware retrieval decisions.</li>
+<li>Low-risk documents should form the initial retrieval corpus, with higher-risk material incorporated only after review.</li>
 </ul>
 </div>
 </section>
