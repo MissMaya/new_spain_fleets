@@ -518,7 +518,9 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>Future model evaluation should test whether fine-tuning reduces late-document and line-end deletion concentration.</li>
 <li>Topology should be used as an evaluation diagnostic, not as part of the main risk index.</li>
-<li>Training subsets should preserve some topology diversity so that the model is not trained only on easy line-centre regions.</li>
+<li>This is because many topology signals are the downstream result of broader transcription failures already captured by e.g. continuity and insertion-deletion measures, incorporating topology into the composite score risks over-weighting related forms of error.</li>
+<li>The principal value of topology metrics lies in helping to explain how transcription failures arise and propagate.</li>
+<li>Training subsets should preserve variation in the positional distribution of errors so that models are exposed to a range of transcription behaviours rather than predominantly well-aligned regions of text.</li>
 </ul>
 </div>
 
@@ -527,7 +529,7 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>Chunks drawn from late-document regions should be treated with caution, especially in styles where deletion peaks are extremely high.</li>
 <li>Chunk overlap may need to increase near unstable document regions, particularly toward document endings.</li>
-<li>The RAG pipeline should consume topology profiles as metadata, allowing retrieval confidence to account for known positional instability.</li>
+<li>The RAG pipeline should consume topology profiles as metadata, enabling retrieval systems to distinguish between passages originating from relatively stable regions of text versus those drawn from regions with elevated transcription risk.</li>
 </ul>
 </div>
 </section>
