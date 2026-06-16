@@ -187,7 +187,7 @@ This document interprets the results of the current corpus report. The analysis 
 <li><a href="#line">4. Line-structure integrity</a></li>
 <li><a href="#concentration">5. Error concentration</a></li>
 <li><a href="#ecology">6. Recurring Error Patterns</a></li>
-<li><a href="#topology">7. Structural topology of instability</a></li>
+<li><a href="#topology">7. Structural topology of transcription errors</a></li>
 <li><a href="#governance">8. Operational governance and subset construction</a></li>
 <li><a href="#handoff">9. Suggested document subsets</a></li>
 <li><a href="#critical">10. Critical cautions</a></li>
@@ -276,7 +276,8 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>Style should be retained as document and chunk metadata in the vector store.</li>
 <li>Chunking policies may need to differ by style because line length and transcription stability differ materially.</li>
-<li>Redonda and Pseudo Redonda may support cleaner retrieval pools; Procesal and Italica Cursiva require stronger quality gating.</li>
+<li>Redonda and Pseudo Redonda appear to provide comparatively reliable foundations for retrieval applications. </li> 
+<li>Procesal and Italica Cursiva may require more rigorous assessment and review prior to downstream use.</li>
 </ul>
 </div>
 </section>
@@ -442,7 +443,7 @@ This document interprets the results of the current corpus report. The analysis 
   <li>Redonda includes <code>principal→prinçipal</code> (<strong>3</strong>) and related cedilla forms.</li>
   </ul>
 </li>
-<li>Bigram evidence is relatively sparse compared with character and word contexts, so it should be treated as a supplementary signal rather than primary.</li>
+<li>Bigram patterns occur less frequently than character- and word-level confusions and therefore provide supporting rather than primary evidence for understanding transcription behaviour.</li>
 </ul>
 
 <div class="box interpretation">
@@ -450,31 +451,31 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>The confusion evidence shows structured error behaviour rather than random noise.</li>
 <li>Many recurrent errors involve historical orthographic variation, including cedilla forms, tilde behaviour, and case substitutions.</li>
-<li>Other errors alter lexical content and are more likely to affect search, retrieval, or downstream machine-learning applications..</li>
+<li>The outputs do not seem to indicate that the most frequent character-level confusions change lexical context, which would have more of an impact on search and retrieval behaviour.</li>
 </ul>
 </div>
 
 <div class="box ml">
 <h3>Fine-tuning takeaway</h3>
 <ul>
-<li>Confusion inventories should become evaluation targets: a fine-tuned model should be checked against the same recurrent confusion classes, not only against aggregate CER.</li>
-<li>Case-only confusions may not require the same treatment as omitted or substituted lexical content.</li>
-<li>Deletion-heavy behaviour remains a higher priority than sparse bigram confusions for training intervention.</li>
+<li>Recurrent confusion patterns should be treated as explicit evaluation targets: improvements should be assessed not only through aggregate metrics such as CER but also through reductions in systematic error classes.</li>
+<li>The findings suggest that not all transcription errors warrant equal intervention. Frequent orthographic variants and case substitutions may be less consequential than errors that remove, introduce, or replace lexical content.</li>
+<li>Training interventions should therefore prioritise error patterns that affect textual correspondence and lexical integrity rather than focusing solely on surface-form variation.</li>
 </ul>
 </div>
 
 <div class="box rag">
 <h3>RAG takeaway</h3>
 <ul>
-<li>Confusion contexts can feed fuzzy retrieval and query expansion dictionaries.</li>
-<li>Historical variants such as <code>senor/señor</code>, <code>ciudad/çiudad</code>, and <code>anos/años</code> should be considered retrieval equivalence candidates.</li>
-<li>Entity-bearing or place-name confusions should be prioritised for RAG because they directly affect recall.</li>
+<li>Many recurrent confusions involve historical orthographic variants that preserve the underlying lexical item and can therefore be accommodated through retrieval normalisation and query expansion.</li>
+<li>Historical variants such as <code>senor/señor</code>, <code>ciudad/çiudad</code>, and <code>anos/años</code> can be addressed through retrieval equivalence rules.</li>
+<li>Retrieval performance is likely to be affected more by errors that alter lexical content or remove information entirely than by frequent character-level variants that preserve meaning.</li>
 </ul>
 </div>
 </section>
 
 <section id="topology">
-<h2>7. Structural topology of transcription instability</h2>
+<h2>7. Structural topology of transcription errors</h2>
 
 <table>
 <thead><tr><th>Operation</th><th>Consistent peak pattern</th><th>Examples from report</th></tr></thead>
@@ -488,27 +489,27 @@ This document interprets the results of the current corpus report. The analysis 
 <ul>
 <li>Deletion topology is the strongest signal in this section:
   <ul>
-  <li>Encadenada deletion peak: <strong>90–100%</strong> line position, <strong>51.5389 events/doc</strong>; <strong>90–100%</strong> document position, <strong>163.0639 events/doc</strong>.</li>
-  <li>Italica_cursiva deletion peak: <strong>90–100%</strong> line position, <strong>99.9194 events/doc</strong>; <strong>90–100%</strong> document position, <strong>240.9547 events/doc</strong>.</li>
-  <li>Procesal deletion peak: <strong>90–100%</strong> line position, <strong>91.8611 events/doc</strong>; <strong>90–100%</strong> document position, <strong>231.9071 events/doc</strong>.</li>
-  <li>Redonda deletion peak: <strong>90–100%</strong> line position, <strong>91.2078 events/doc</strong>; <strong>90–100%</strong> document position, <strong>198.1169 events/doc</strong>.</li>
+  <li>Encadenada deletion peak: <strong>90-100%</strong> line position (final 10th of the line), <strong>51.5389 events/doc</strong>; <strong>90–100%</strong> document position (final 10th of the document), <strong>163.0639 events/doc</strong>.</li>
+  <li>Italica Cursiva deletion peak: <strong>90-100%</strong> line position, <strong>99.9194 events/doc</strong>; <strong>90-100%</strong> document position, <strong>240.9547 events/doc</strong>.</li>
+  <li>Procesal deletion peak: <strong>90-100%</strong> line position, <strong>91.8611 events/doc</strong>; <strong>90-100%</strong> document position, <strong>231.9071 events/doc</strong>.</li>
+  <li>Redonda deletion peak: <strong>90-100%</strong> line position, <strong>91.2078 events/doc</strong>; <strong>90-100%</strong> document position, <strong>198.1169 events/doc</strong>.</li>
   </ul>
 </li>
-<li>Insertion peaks are typically at the beginning of lines but later in documents:
+<li>Insertion peaks are typically at the beginning of lines but occur later in the documents:
   <ul>
-  <li>Procesal insertion peak: <strong>0–10%</strong> line position and <strong>70–80%</strong> document position.</li>
-  <li>Redonda insertion peak: <strong>0–10%</strong> line position and <strong>80–90%</strong> document position.</li>
+  <li>Procesal insertion peak: <strong>0-10%</strong> line position and <strong>70-80%</strong> document position.</li>
+  <li>Redonda insertion peak: <strong>0-10%</strong> line position and <strong>80-90%</strong> document position.</li>
   </ul>
 </li>
-<li>Substitution events are much less dense than deletion and insertion events in the topology summary.</li>
+<li>The error topology summary shows that substitution events are much less frequent than deletion and insertion events.</li>
 </ul>
 
 <div class="box interpretation">
 <h3>Overall interpretation</h3>
 <ul>
 <li>The topology section is one of the strongest pieces of evidence that transcription error is structurally organised.</li>
-<li>The repeated deletion peak at <strong>90–100%</strong> of both line and document position suggests a systematic end-region failure pattern, not random character-level noise.</li>
-<li>The combination of late-document deletions and line-start insertions is consistent with drift propagation: once sequence alignment becomes unstable, later regions absorb cascading mismatch.</li>
+<li>The repeated deletion peak at <strong>90-100%</strong> for both line and document positions suggests a systematic end-region failure pattern, not random character-level noise.</li>
+<li>The combination of late-document deletions and line-start insertions suggests that once the HTR loses alignment with the source text, subsequent regions become increasingly misaligned and accumulate additional transcription errors.</li>
 </ul>
 </div>
 
