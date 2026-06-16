@@ -228,9 +228,8 @@ This document interprets the results of the current corpus report. The analysis 
 <div class="box rag">
 <h3>RAG takeaway</h3>
 <ul>
-<li>RAG quality will be limited less by formatting artefacts than by transcription divergence, missing content, and chunk instability.</li>
-<li>Document-level quality metadata should be attached to indexed material from the outset.</li>
-<li>The eventual chunking process should inherit style, risk, continuity, IDR, line-structure, and topology metadata.</li>
+<li>For RAG, missing content and loss of correspondence between HTR and GT should be the main areas of focus.</li>
+<li>Consider attaching document-level metadata on quality along with the transcriptions as they are ingested into the RAG pipeline. This would allow documents to be filtered, prioritised, or flagged according to their assessed transcription risk.</li>
 </ul>
 </div>
 </section>
