@@ -538,41 +538,43 @@ This document interprets the results of the current corpus report. The analysis 
 <h2>8. Operational governance and subset construction</h2>
 
 <ul>
-<li>The risk index is intentionally narrow and uses only four metrics:
+<li>The risk index is intentionally narrow and uses only four of the diagnostic metrics:
   <ul>
-  <li><strong>CER</strong>, weight <strong>0.35</strong>;</li>
-  <li><strong>IDR</strong>, weight <strong>0.30</strong>;</li>
-  <li><strong>continuity risk</strong>, weight <strong>0.25</strong>;</li>
-  <li><strong>adjusted line delta</strong>, weight <strong>0.10</strong>.</li>
+  <li><strong>CER</strong>, index weight <strong>0.35</strong>;</li>
+  <li><strong>IDR</strong>, index weight <strong>0.30</strong>;</li>
+  <li><strong>continuity risk</strong>, index weight <strong>0.25</strong>;</li>
+  <li><strong>adjusted line delta</strong>, index weight <strong>0.10</strong>.</li>
   </ul>
 </li>
-<li>Risk bands are assigned within style, producing approximately one third high, medium, and low risk documents per style:
-  <ul>
+<li>Risk bands are assigned within styles. </li>
+<li>Within a style, documents are ranked by index score and then split into approximate thirds.</li>
+<li>The bottom third by score is classified as high risk, the middle third medium risk and the top third low risk <strong>for that style</strong>, e.g.:
+  <ul></li>
   <li>Encadenada: <strong>193 high</strong>, <strong>193 medium</strong>, <strong>193 low</strong>.</li>
   <li>Procesal: <strong>298 high</strong>, <strong>298 medium</strong>, <strong>297 low</strong>.</li>
   <li>Redonda: <strong>26 high</strong>, <strong>26 medium</strong>, <strong>25 low</strong>.</li>
   </ul>
 </li>
-<li>The highest-risk documents show that risk is often driven by extreme CER, IDR, and low continuity even when line structure remains stable.</li>
-<li>For example, the top redonda-risk document has CER <strong>0.372093</strong>, IDR <strong>0.186047</strong>, and continuity <strong>0.000000</strong>, despite stable line structure.</li>
+<li>The highest-risk documents show that risk is often driven by high CER, IDR, and low continuity even when line structure remains stable.</li>
+<li>For example, the Redonda document identified by index scoring as the riskiest has CER <strong>0.372093</strong>, IDR <strong>0.186047</strong>, and continuity <strong>0.000000</strong>, despite its line structure matching the GT.</li>
 </ul>
 
 <div class="box interpretation">
 <h3>Overall interpretation</h3>
 <ul>
-<li>The index is not a complete description of document quality. It is an operational governance instrument.</li>
-<li>Its strength is that it combines overall error, drift, coherence, and segmentation risk without absorbing every diagnostic signal.</li>
-<li>This makes the index more defensible than a broad composite that includes every available metric.</li>
+<li>The index is not a complete description of document quality. It is an operational governance instrument designed to combine overall error, drift, coherence, and segmentation risk without absorbing every diagnostic signal.</li>
+<li>This makes the index more defensible than a broad composite because it distinguishes between metrics that measure core dimensions of transcription reliability and diagnostics that explain how those failures manifest.</li>
+<li>Reducing the index to a core selection of metrics avoids introducing overlapping and potentially redundant representations of the same underlying phenomena.</li>
 </ul>
 </div>
 
 <div class="box ml">
 <h3>Fine-tuning takeaway</h3>
 <ul>
-<li>Use low-risk documents as the cleanest supervision pool within each style.</li>
-<li>Use medium-risk documents for robustness and curriculum-learning experiments.</li>
-<li>Use high-risk documents for review, exclusion testing, and stress-testing, not for initial stable fine-tuning.</li>
 <li>Because risk is assigned within style, every style contributes candidate low-risk and high-risk material.</li>
+<li>Use low-risk documents as the highest-confidence supervision set within each calligraphic style.</li>
+<li>Use medium-risk documents to introduce controlled variability and support robustness experiments.</li>
+<li>Use high-risk documents for review, exclusion testing, and model stress-testing rather than for initial fine-tuning.</li>
 </ul>
 </div>
 
